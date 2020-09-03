@@ -1,0 +1,343 @@
+---
+title: "Microbiome analysis - cohort figures"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(ggplot2); library(rmarkdown); library(vegan); library(dotwhisker)
+library(dplyr); library(phyloseq)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000); theme_set(theme_bw())
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_plot_2020_09_02.RData")
+
+```
+
+## Figure 2 - Emphasizing amount of diarrhea and antibiotic usage
+
+Figure 2A
+``` {r}
+
+df_plot = df_fig2A
+colors_temp = colors; names(colors_temp)[names(colors_temp) == 'no crypto'] = "not in microbiome cohort"
+colors_temp_use = colors_temp; colors_temp_use[names(colors_temp_use) != 'not in microbiome cohort'] = c("red","red","red")
+
+p = ggplot(data = df_plot) +
+  geom_histogram( aes(x = n_diarr, fill = TYPE), bins = 45)+
+  scale_fill_manual(values = colors_temp_use) +
+  theme(axis.text.x = element_text(angle=45,hjust=1),
+        axis.text.y = element_text(size=12),
+        axis.title.x = element_text(size=20),
+        axis.title.y = element_text(size=20),
+        plot.margin=unit(c(.5,.5,.5,.5),"cm"),
+        legend.position = c(.6,.7),
+        legend.title = element_blank()) + xlab('episodes of diarrhea') +
+  guides(fill = F) +
+  ylab('number of children')
+p
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig2A_diarrhea_freq_mirpur.png",
+       p, width = 4, height = 4, dpi = 600)
+rm(p, df_plot, colors_temp, colors_temp_use)
+
+```
+
+Supplemental Figure 2A
+```{r}
+
+n_kids = length(unique(df_sf2A$CHILDID))
+df_sf2A %>% 
+  ggplot(aes(x = age, y = (..count..)/n_kids)) +
+  stat_bin(binwidth = 30) +
+  geom_bar() + facet_wrap(~value_use)+
+  theme(plot.margin=unit(c(.5,.5,.5,.5),"cm")) +
+  geom_vline(xintercept = 365, linetype = "dotted") +
+  ylab('percent of children') + xlab('age in days') + scale_y_continuous(labels = scales::percent)
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Sfig2A_antibiotic_usage_mirpur.png",
+       width = 6.8, height = 5,units = "in",dpi = 300)
+
+```
+
+Figure 2B
+```{r}
+
+# stats and plot
+my_comparisons <- list(#c("no infection\ndetected", "subclinical"), 
+                       c("no infection\ndetected", "both"),
+                       c("subclinical","both"),
+                       c("subclinical", "diarrheal"))
+colors_temp = colors; colors_temp['no infection\ndetected'] = "#666666"
+p = ggplot(data = df_fig2B, aes(x = TYPE, y = n, color = TYPE)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_point(alpha = 0.1, position = position_jitter(width = 0.3, height = 0.01, seed = SEED_INT)) +
+  scale_color_manual(values = colors_temp) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 1),
+        plot.margin=unit(c(.25,.5,.5,.25),"cm")) + 
+  ggpubr::stat_compare_means(comparisons = my_comparisons, size = 2, method = 't.test') +
+  ylab('episodes of diarrhea (age 0-2yrs)') + xlab(NULL) + guides(color = F)
+# SOMETHING IS WEIRD -> NUMBER OF DIARRHEAL POINTS IS TOO LOW - NEVERMIND \/
+# this is not using the microbiome samples' definition of subclin/diarrhea, this is using the FULL dataset
+p
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig2B_num_diarrheal_events_mirpur.png",
+       p , width =2, height = 3,units = "in",dpi = 300)
+
+```
+
+Figure 2C
+```{r}
+
+# stats and plot
+my_comparisons <- list(#c("no infection\ndetected", "subclinical"), 
+                       #c("no infection\ndetected", "both"), 
+                       #c("subclinical", "both"), 
+                       #c("diarrheal", "both"), 
+                       c("no infection\ndetected", "diarrheal"))
+                       #c("subclinical", "diarrheal"))
+colors_temp = colors; colors_temp['no infection\ndetected'] = "#666666"
+p = ggplot(data = df_fig2C, aes(x = TYPE, y = n, color = TYPE)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_point(alpha = 0.1, position = position_jitter(width = 0.3, height = 0.01, seed = SEED_INT)) +
+  scale_color_manual(values = colors_temp) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 1),
+        plot.margin=unit(c(.25,.5,.5,.25),"cm")) + 
+  ggpubr::stat_compare_means(comparisons = my_comparisons, size = 2, method = 't.test') +
+  ylab('doses of antibiotics (age 0-2yrs)') + xlab(NULL) + guides(color = F)
+# this is not using the microbiome samples' definition of subclin/diarrhea, this is using the FULL dataset
+p
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig2C_num_abx_events_mirpur.png",
+       p , width =2, height = 3,units = "in",dpi = 300)
+
+```
+
+## Figure 3
+
+Frequent reads overall - Figure 3A + 3D
+```{r}
+
+rare_min = 10000
+p1 = ggplot(df_fig3A, 
+           aes(x = names, y = nreads/(rare_min*nrow(sample_data(ps_for_explore_fig3A))), fill=genus)) + geom_bar(stat="identity")
+p1 = p1 + theme(axis.text.x = element_text(size=14,angle=45,hjust=1),
+              axis.text.y = element_text(size=14),
+              axis.title.x = element_text(size=20),
+              axis.title.y = element_text(size=20),
+              plot.margin=unit(c(.5,.5,.5,.5),"cm")) + 
+  labs(y="Fraction of all\nreads from ASV", x="ASV assigned genus") +
+  scale_x_discrete(labels = df_fig3A$genus) + 
+  scale_fill_grey() + guides(fill = F) + scale_y_continuous(labels = scales::percent)
+p1
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig3A_abundant_asvs_mirpur.png",
+       plot=p1, width = 6.8,height = 4.2,units = "in",dpi = 300)
+
+## to show lack of dominance of individual microbes
+
+p_alt = ggplot(alt_df, aes(x = reorder(sample, percent_reads), y = percent_reads, fill = Genus)) +
+  geom_bar(stat = "identity")
+p_alt = p_alt + theme(axis.text.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              axis.text.y = element_text(size=14),
+              axis.title.x = element_text(size=18),
+              axis.title.y = element_text(size=18),
+              plot.margin=unit(c(.7,.5,.5,.5),"cm")) + 
+  scale_fill_grey(na.value = "grey") +
+  scale_y_continuous(labels = scales::percent, limits = c(0,1)) +
+  labs(y="Percent of sample reads\nfrom most common ASV", x="samples") #+ guides(fill = F)
+
+symptomatic.lab <- c("diarrheal", "subclinical"); names(symptomatic.lab) <- c("TRUE", "FALSE")
+pre_detection.lab <- c("pre-detection", "time-of-detection"); names(pre_detection.lab) <- c("TRUE", "FALSE")
+p = ggplot(alt_df, aes(x = reorder(sample, percent_reads), y = percent_reads)) +
+  geom_bar(stat = "identity") + 
+  facet_grid(symptomatic~pre_detection,labeller = labeller(
+    symptomatic = symptomatic.lab, pre_detection = pre_detection.lab)) 
+p = p + theme(axis.text.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              axis.text.y = element_text(size=14),
+              axis.title.x = element_text(size=18),
+              axis.title.y = element_text(size=18),
+              plot.margin=unit(c(.7,.5,.5,.5),"cm")) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,1)) + scale_fill_grey(na.value = "grey") +
+  labs(y="Percent of sample reads\nfrom most common ASV", x="samples") #+ guides(fill = F)
+p
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig3_dominant_asvs.png", 
+       plot=p, width=6.8, height = 4.2,units = "in",dpi = 300)
+
+p = ggplot(df_fig3D, aes(x = names, y = nsamples/(nrow(sample_data(ps_for_explore_fig3A))), fill=genus)) + geom_bar(stat="identity")
+p = p + theme(axis.text.x = element_text(size=14,angle=45,hjust=1),
+              axis.text.y = element_text(size=14),
+              axis.title.x = element_text(size=18),
+              axis.title.y = element_text(size=18),
+              plot.margin=unit(c(.7,.5,.5,.5),"cm")) + 
+  labs(y="Percent of stool samples\ncontaining ASV", x="genus of ASV") + guides(fill = F) +
+  scale_x_discrete(labels = df_fig3D$genus) + scale_fill_grey(na.value = "grey") + xlab(NULL) +
+  geom_hline(yintercept = .5, linetype="dashed", 
+                color = "gray", size=1) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,1))
+p
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig3D_samplecount_asvs_mirpur.png",
+       plot=p, width=6.8, height = 4.2,units = "in",dpi = 300)
+
+p = ggplot(alt_countsumsdf, aes(x = names, y = nsamples/(nrow(sample_data(ps_rare_bygenus))), fill=genus)) + geom_bar(stat="identity")
+p = p + theme(axis.text.x = element_text(angle=45,hjust=1),
+              axis.text.y = element_text(size=12),
+              axis.title.x = element_text(size=20),
+              axis.title.y = element_text(size=20),
+              plot.margin=unit(c(.5,.5,.5,.5),"cm")) + 
+  labs(y="Fraction of samples containing ASV", x="ASV assigned genus") +
+  scale_x_discrete(labels = alt_countsumsdf$genus) + guides(fill = F) + #readsumsdf?
+  scale_y_continuous(labels = scales::percent, limits = c(0,1)) 
+
+```
+
+Richness and Evenness - Figure 3B and 3C
+
+```{r}
+
+theme_set(theme_bw())
+p_observed = plot_richness(ps_for_alpha,x='Clinical.type', measures = "Observed", color = 'Clinical.type') + 
+  geom_boxplot(alpha=0.5, outlier.shape = NA) + 
+  geom_point(size = 1,alpha = 0.25,position = position_jitter(w = 0.1, h = 0)) + 
+  labs(y="Richness (observed ASVs)",x=NULL) + 
+  theme(strip.text.x=element_blank(),
+        axis.title.x = element_text(size=20), 
+        axis.title.y = element_text(size=20),
+        axis.text.x = element_text(size=12,angle=-45,hjust=0,vjust = 1),
+        plot.margin=unit(c(.5,.5,.5,.5),"cm")) +
+  scale_x_discrete(labels = c('prior to\nsubclinical', 'prior to\ndiarrheal', 'subclinical','diarrheal')) +
+  scale_color_manual(values = c("#666666","#666666","#FF7F00","#1F78B4")) +
+  guides(color = F)
+p_observed$layers <- p_observed$layers[-1]
+p_observed
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig3B_Observed_div_mirpur.png",
+       plot=p_observed,width=4.5, height = 4.2,units = "in",dpi = 300)
+
+p_simpson = plot_richness(ps_for_alpha,measures = "InvSimpson", x='Clinical.type', color = 'Clinical.type') + 
+  geom_boxplot(alpha=0.5, outlier.shape = NA) + 
+  geom_point(size = 1,alpha = 0.25,position = position_jitter(w = 0.1, h = 0)) + 
+  labs(y="Evenness (Inv. Simpson)",x=NULL) + 
+  theme(strip.text=element_blank(),
+        axis.title.x = element_text(size=20), 
+        axis.title.y = element_text(size=20),
+        axis.text.x = element_text(size=12,angle=-45,hjust=0,vjust = 1),
+        plot.margin=unit(c(.5,.5,.5,.5),"cm")) +
+  scale_x_discrete(labels = c('prior to\nsubclinical', 'prior to\ndiarrheal', 'subclinical','diarrheal')) +
+  scale_color_manual(values = c("#666666","#666666","#FF7F00","#1F78B4")) +
+  guides(color = F)
+p_simpson$layers <- p_simpson$layers[-1]
+p_simpson
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig3C_invsimpson_mirpur.png",
+       plot=p_simpson, width=4.5, height = 4.2,units = "in",dpi = 300)
+
+
+```
+
+## Figure 4A
+
+```{r}
+
+p = plot_ordination(
+  physeq = ps_rare_for_beta,
+  ordination = ps_rare.ord,
+  color = "Clinical.type",
+  shape = "Number.of.crypto.positive.events"
+)   + 
+  scale_color_manual(values = c("#666666","#FF7F00","#1F78B4"),
+                     labels = c("12" = "diarrheal","10" = "subclinical","1" = "pre-detection") )+ # 12 is diarrhea, 1,2 are pre
+  theme(plot.margin=unit(c(.5,.5,.5,.5),"cm"))  + 
+  labs(color = "symptomatic?", shape = "Number of infections")
+p
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4A_pcoa_mirpur_euclidean.png", 
+       plot=p, width = 5.4,height = 3,units = "in",dpi = 600)
+
+```
+
+
+Do all kids have at least one abx between predetction and time of detection???
+
+```{r}
+
+ggplot(df_abx_between, aes(x = abx_between_samples, y = value, fill = symptomatic)) + geom_bar(stat = "identity",position = "dodge")+
+  annotate(geom = "text", x = 1.8, y = 70, label = "Pearson's Chi-\nsquared test\np-value = NS") +
+  scale_fill_manual(values= c(colors['diarrheal'],colors['subclinical'])) +
+  ylab('number of children') + xlab('antibiotics between pre-detection\nand time-of-detection samples?') +
+  guides(fill= guide_legend(title='symptomatic?'))
+
+```
+
+Do sympotmatic kids have more abx before time_of_detection sample? 
+
+```{r}
+
+my_comparisons = list(c("subclinical","diarrheal"))
+ggplot(df_abx_total,aes(x= symptomatic, y = n_abx_doses, color = symptomatic)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_point(alpha = 0.5, position = position_jitter(width = 0.3, height = 0, seed = SEED_INT)) +
+  scale_color_manual(values = c(colors['diarrheal'],colors['subclinical'])) +
+  ylab('number of antibiotic doses') + xlab('symptomatic?') + guides(color = F) +
+  ggpubr::stat_compare_means(comparisons = my_comparisons, size = 3, method = 't.test')
+
+```
+
+Do sympotmatic kids have more abx before time_of_detection sample MONTH PRIOR ONLY? 
+
+```{r}
+
+my_comparisons = list(c("subclinical","diarrheal"))
+ggplot(df_abx_month,aes(x= symptomatic, y = n_abx_doses, color = symptomatic)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_point(alpha = 0.5, position = position_jitter(width = 0.3, height = 0, seed = SEED_INT)) +
+  scale_color_manual(values = c(colors['diarrheal'],colors['subclinical'])) +
+  ylab('number of antibiotic doses') + xlab('symptomatic?') + guides(color = F) +
+  ggpubr::stat_compare_means(comparisons = my_comparisons, size = 3, method = 't.test')
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig2B_abx_MONTH_mirpur.png", 
+              width = 3, height = 4, dpi = 600)
+
+```
+
+What happens if we break this down to look at a single drug at a time?
+
+```{r}
+
+ggplot(df_individual_abx, aes(x = value,y = variable, color = symptomatic)) + 
+  geom_boxplot(position = "dodge", outlier.shape = NA) + 
+  geom_point(alpha = 0.1, 
+             position = position_jitterdodge(jitter.width = 0.3, jitter.height = 0, seed = SEED_INT, dodge.width = 0.75)) +
+  scale_color_manual(values = c(colors['diarrheal'],colors['subclinical'])) +
+  ylab('Antibiotics') + xlab('number of doses') +
+  guides(color= guide_legend(title='symptomatic?')) +
+  theme(legend.position = c(.8,.15))
+
+```
+
+Also check number of distinct antibiotics
+
+```{r}
+
+p = ggplot(df_distinct_abx, aes(x = n_distinct_abx,y = symptomatic, color = symptomatic)) + 
+  geom_boxplot(position = "dodge", outlier.colour = NA) + geom_point(alpha = 0.2, position = position_jitter(width = 0.3, height = 0.3, seed = SEED_INT)) +
+  scale_color_manual(values = c(colors['diarrheal'],colors['subclinical'])) + guides(color = F) +
+  xlab('number of distinct antibiotics used') + ylab('symptomatic?')
+p
+
+dwplot(abx_model, vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2)) %>%
+  relabel_predictors(c(n_distinct_abx = "number of distinct antibiotics",
+                       Nalidixic_acid = "Nalidixic acid")) +
+     theme_bw() + xlab("Coefficient Estimate") + ylab("") +
+  theme(plot.title = element_text(face="bold"),
+        plot.margin = unit(c(1.5,1,1,1), "cm")) + 
+  scale_color_manual(values = c("black")) + 
+  guides(color = F)
+
+```

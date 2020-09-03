@@ -1,0 +1,245 @@
+---
+title: "Microbiome analysis - data prep"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+
+Metadata variables: Metadata variables included age-related information (month/year of birth, age in days), socio-economic status (income, perceived food deficit), time of collection (month, year, amount of rainfall that month), the child’s home conditions (presence of an indoor drain, drinking water source, water treatment method, number of children under the age of 5 years), coinfection status (positive qPCR for Giardia spp. or E. histolytica), repeat infection v. primary infection, and growth status (z-scores for weight-for-age, height-for-age, weight-for-height, and body mass index for age). These are known to influence the development of diarrhea broadly or the acquisition of Cryptosporidium (Korpe et al. 2016; Steiner et al. 2018; Mondal et al. 2012)
+
+Code for reference:
+/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/open_and_save_all_data.Rmd to generate /Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData
+
+The above code processes the private patient metadata and so cannot be shared at this point.
+
+# Load data and packages
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(ggplot2); library(tibble); library(dplyr); library(phyloseq)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000); theme_set(theme_bw())
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_plot_2020_09_02.RData")
+
+```
+
+# Generate supplemental file 1B to get read counts
+
+```{r}
+
+p = ggplot(read_counts_df) + geom_histogram(aes(x = value)) + facet_wrap(~variable, nrow = 1) + ylab('samples') + xlab('reads') + 
+  geom_vline(data = read_count_stats_df, aes(xintercept = mean), color = "red", linetype = "dashed") +
+  theme(axis.text.x = element_text(size = 6))
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig1D_read_counts.png", 
+       p, width = 8, height = 2, dpi = 600)
+
+```
+
+# Sample numbers
+
+Total (raw) reads: `r sum(df_summary$forward)`
+
+Mean (raw) reads per sample: `r mean(df_summary$forward)`
+
+Median (raw) reads per sample: `r median(df_summary$forward)`
+
+Total (filtered) reads per sample: `r sum(na.omit(df_summary$nonchim))`
+
+Mean (filtered) reads per sample: `r mean(na.omit(df_summary$nonchim))`
+
+Median (filtered) reads per sample: `r median(na.omit(df_summary$nonchim))`
+
+Total samples (excluding controls): `r length(df_summary$sample[!startsWith(df_summary$sample,'neg') & !startsWith(df_summary$sample,'pos') ])`
+
+# Plot positive controls
+
+```{r}
+
+# run 1
+rare_min = 10000
+readsumsdf = plot_run1
+p1 = ggplot(readsumsdf, 
+           aes(x = names, y = nreads/(rare_min*nrow(sample_data(pos_controls1))), fill=genus)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(size=14,angle=45,hjust=1),
+              axis.text.y = element_text(size=14),
+              axis.title.x = element_text(size=20),
+              axis.title.y = element_text(size=20),
+              plot.margin=unit(c(.5,.5,.5,.5),"cm")) + 
+  labs(y="Fraction of reads\nfrom ASV in run1\npositive controls", x="ASV assigned genus") +
+  scale_x_discrete(labels = readsumsdf$genus) + 
+  scale_fill_grey() + guides(fill = F) + scale_y_continuous(labels = scales::percent)
+p1
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig1A_abundant_asvs_run1_pos_controls.png", 
+plot=p1, width = 5.6,height = 4.2,units = "in",dpi = 300)
+
+# run 2
+readsumsdf = plot_run2
+p1 = ggplot(readsumsdf, 
+           aes(x = names, y = nreads/(rare_min*nrow(sample_data(pos_controls2))), fill=genus)) + geom_bar(stat="identity") + theme(axis.text.x = element_text(size=14,angle=45,hjust=1),
+              axis.text.y = element_text(size=14),
+              axis.title.x = element_text(size=20),
+              axis.title.y = element_text(size=20),
+              plot.margin=unit(c(.5,.5,.5,.5),"cm")) + 
+  labs(y="Fraction of reads\nfrom ASV in run2\npositive controls", x="ASV assigned genus") +
+  scale_x_discrete(labels = readsumsdf$genus) + 
+  scale_fill_grey() + guides(fill = F) + scale_y_continuous(labels = scales::percent)
+p1
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig1B_abundant_asvs_run2_pos_controls.png", plot=p1, width = 5.5,height = 4.2,units = "in",dpi = 300)
+
+
+```
+
+# Sample numbers (prior to filtration due to correct pairing)
+
+Number of children: `r length(unique(sample_data(ps)$Child.ID))`
+
+Number of samples: `r dim(sample_data(ps))[[2]]`
+
+Total reads: `r sum(sample_sums(ps))` 
+
+Mean reads per sample: `r mean(sample_sums(ps))`
+
+Median reads per sample: `r median(sample_sums(ps))`
+
+## Plot Ct data
+
+```{r}
+
+df = ct_df
+
+df %>%
+  ggplot() + 
+  geom_point(aes(x = Pan_crypto, y = value, color = variable),alpha = 0.5) + xlab('Ct for pan-genus qPCR')+ 
+  facet_wrap(~infected_use) + ylab('Ct, species-specific qPCR') +guides(color = F)
+
+```
+
+### Redo figure with Cts
+```{r}
+
+df_plot = ct_updated_df
+
+colors_temp = colors; colors_temp['no infection\ndetected'] = "#666666"
+p = ggplot(df_plot %>% dplyr::rename(`clinical type` = TYPE), aes(x = min_ct_overall, y = n_diar,color = `clinical type`)) +
+     geom_point(alpha = .2) + stat_smooth(method = "glm",se = F)+scale_color_manual(values = colors_temp) +
+  xlab('max parasite burden\n(Ct)') + ylab('number of diarrheal episodes')
+p
+
+```
+
+# Sample numbers (AFTER filtration due to correct pairing)
+
+Number of children: `r length(unique(sample_data(ps_rare_diff)$Child.ID))`
+
+Number of samples: `r length(sample_data(ps_rare_diff)$Child.ID)`
+
+Total number of taxa: `r ntaxa(ps_rare_diff)`
+
+# Figure 2
+
+``` {r}
+
+ggplot(axis_location, aes(x = PC1, y = PC2, color = symptomatic, shape = Number.of.crypto.positive.events)) + 
+  geom_point() + 
+  scale_color_manual(values = c(colors["diarrheal"],colors["subclinical"]))+ # 12 is diarrhea, 1,2 are pre
+  theme(strip.text.x=element_text(size=20,face="bold"), 
+        plot.margin=unit(c(.5,.5,.5,.5),"cm")) + 
+  labs(color = "symptomatic?", shape = "Number of infections")
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig4_pcoa_change_mirpur.png",  width = 5.4,height = 3,units = "in",dpi = 600)
+
+```
+
+# Table 1
+```{r}
+
+ps_raw = readRDS("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/ps_2020_08_12.rds")
+table(sample_data(subset_samples(ps_raw, Site == 1))$Clinical.type)
+table(sample_data(subset_samples(ps_raw, Site == 2))$Clinical.type)
+length(sample_data(subset_samples(ps_raw, Site == 1))$Clinical.type)
+length(sample_data(subset_samples(ps_raw, Site == 2))$Clinical.type)
+
+ggplot(as(sample_data(ps_raw),"data.frame"), aes(x = Age.in.days)) +
+  geom_histogram(binwidth = 30)
+
+length(unique(sample_data(ps_rare_diff)$Child.ID))
+length((sample_data(ps_rare_diff)$Child.ID))
+temp  = as(sample_data(subset_samples(ps_rare_diff, pre_detection == F )),"data.frame") %>% select(Child.ID, Number.of.crypto.positive.events) %>% tibble::rownames_to_column('rown') %>% select(-rown) %>% group_by(Child.ID) %>% top_n(n=1)
+table(temp$Number.of.crypto.positive.events)
+
+temp  = as(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F )),"data.frame") %>% select(Child.ID, Number.of.crypto.positive.events) 
+table(temp$Number.of.crypto.positive.events)
+temp  = as(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == T )),"data.frame") %>% select(Child.ID, Number.of.crypto.positive.events) 
+table(temp$Number.of.crypto.positive.events)
+temp  = as(sample_data(subset_samples(ps_rare_diff, pre_detection == F)),"data.frame") %>% select(Child.ID, Number.of.crypto.positive.events) 
+table(temp$Number.of.crypto.positive.events)
+
+sample_data(ps_rare_diff)$Date.of.collection %>% min()
+sample_data(ps_rare_diff)$Date.of.collection %>% max()
+
+table(merge(as(sample_data(subset_samples(ps_rare_diff, pre_detection == F )),"data.frame")%>% select(Child.ID) %>% distinct(), 
+            burden_sex, by.x = 'Child.ID', by.y = "SID", all.x = T)$SEX)
+#1 = male, 2 = female
+
+
+mean(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == F))$Age.in.days)
+sd(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == F))$Age.in.days)
+mean(sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == F))$Age.in.days)
+sd(sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == F))$Age.in.days)
+mean(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$Age.in.days)
+sd(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$Age.in.days)
+t.test(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == F))$Age.in.days, sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == F))$Age.in.days)
+
+mean(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == F))$Pan_crypto)
+sd(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == F))$Pan_crypto)
+mean(sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == F))$Pan_crypto)
+sd(sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == F))$Pan_crypto)
+mean(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$Pan_crypto)
+sd(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$Pan_crypto)
+t.test(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == F))$Pan_crypto, sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == F))$Pan_crypto)
+
+nrow(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == F)))
+nrow(sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == F)))
+nrow(sample_data(subset_samples(ps_rare_diff, symptomatic == T & pre_detection == T)))
+nrow(sample_data(subset_samples(ps_rare_diff, symptomatic == F & pre_detection == T)))
+nrow(sample_data((ps_rare_diff)))
+
+table(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$Number.of.crypto.positive.events)
+table(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F))$Number.of.crypto.positive.events)
+table(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == T))$Number.of.crypto.positive.events)
+
+
+t1 = as(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == T)), "data.frame") %>% 
+  select(Child.ID,Age.in.days,age_at_surv) %>% 
+  mutate(age_diff = Age.in.days- age_at_surv) %>% 
+  select(age_diff) 
+mean(t1$age_diff)
+sd(t1$age_diff)
+t2 = as(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F)), "data.frame") %>% 
+  select(Child.ID,Age.in.days,age_at_surv) %>% 
+  mutate(age_diff = Age.in.days- age_at_surv) %>% 
+  select(age_diff)
+mean(t2$age_diff)
+sd(t2$age_diff)
+t.test(t1$age_diff,t2$age_diff)
+
+
+t3 = as(sample_data(subset_samples(ps_rare_diff, pre_detection == F)), "data.frame") %>% 
+  select(Child.ID,Age.in.days,age_at_surv) %>% 
+  mutate(age_diff = Age.in.days- age_at_surv) %>% 
+  select(age_diff)
+mean(t3$age_diff)
+sd(t3$age_diff)
+min(t3$age_diff)
+max(t3$age_diff)
+
+```

@@ -1,0 +1,183 @@
+---
+title: "Microbiome analysis - Mirzapur follow-up"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(phyloseq); library(reshape2)
+library(rmarkdown); library(dplyr); library(tidyr); library(tibble)
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
+rm(list= ls()[! (ls() %in% c('left_study_ids'))])
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p2_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p3_2020_09_02.RData")
+ps_mirzapur = readRDS("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/ps_2020_08_12.rds")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p1_2020_09_02.RData") # load save_df1 and save_df2
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+```
+
+# Check Megasphaera in Mirzapur
+
+```{r}
+
+ps_mirzapur = subset_samples(ps_mirzapur, Site == 2) # MIRZAPUR ONLY
+
+# Quality control - remove mitochondrial and chloroplast reads
+og_taxa = data.frame(tax_table(ps_mirzapur))
+
+# first remove non-bacteria
+keep = rownames(og_taxa[og_taxa$Kingdom %in% c("Bacteria","Archaea"),])
+ps_mirzapur = prune_taxa(keep,ps_mirzapur)
+keep = rownames(og_taxa[og_taxa$Family != "Mitochondria",])
+ps_mirzapur = prune_taxa(keep,ps_mirzapur)
+keep = rownames(og_taxa[og_taxa$Class != "Chloroplast",])
+ps_mirzapur = prune_taxa(keep,ps_mirzapur)
+
+# remove if error in any reporting re Crypto infection
+keep1 = ifelse(sample_data(ps_mirzapur)$Crypto..Any. == '1' & as.numeric(sample_data(ps_mirzapur)$Clinical.type) < 3, 0, 1)
+ps_mirzapur = prune_samples(as.logical(keep1),ps_mirzapur)
+keep2 = ifelse(sample_data(ps_mirzapur)$Crypto..Any. == '999' & as.numeric(sample_data(ps_mirzapur)$Clinical.type) > 3, 0, 1)
+ps_mirzapur = prune_samples(as.logical(keep2),ps_mirzapur)
+keep3 = ifelse(sample_data(ps_mirzapur)$Crypto..Any. == '888' & as.numeric(sample_data(ps_mirzapur)$Clinical.type) > 3, 0, 1)
+ps_mirzapur = prune_samples(as.logical(keep3),ps_mirzapur)
+rm(keep, keep1, keep2, keep3)
+
+# remove children who were lost to follow up
+ps_mirzapur = subset_samples(ps_mirzapur, !(Child.ID %in% left_study_ids))
+
+# Rarify reads in all samples
+rare_min = 10000
+# remove samples with fewer counts than the minimum
+ps_mirzapur_rare = prune_samples(sample_sums(ps_mirzapur) >=rare_min,ps_mirzapur) #8 removed
+# remove samples with NA age
+ps_mirzapur_rare = prune_samples(!is.na(sample_data(ps_mirzapur_rare)[,"Age.in.days"])[,1],ps_mirzapur_rare) # none removed
+ps_mirzapur_rare = rarefy_even_depth(ps_mirzapur_rare,sample.size=rare_min,rngseed=SEED_INT) # OTUs no longer in the dataset will be removed
+
+# number of Megaspaheara ASVs
+temp = as.data.frame(tax_table(ps_mirzapur_rare))
+dim(temp[temp$Genus == 'Megasphaera',])
+# temp2 = as.data.frame(tax_table(ps_rare))
+# dim(temp2[temp2$Genus == 'Megasphaera',])
+
+```
+
+# Extract ASV that important from classifiers
+
+```{r}
+
+otu_for_comp_TOD = as.data.frame(otu_table(ps_mirzapur_rare))[,save_df1$variable]
+otu_for_comp_PD = as.data.frame(otu_table(ps_mirzapur_rare))[,save_df1$variable]
+
+# get TOD values
+plt_df = melt(otu_for_comp_TOD %>% rownames_to_column('sample')) %>%
+  group_by(variable) %>%
+  mutate(value_use = value/max(value)) %>%
+  ungroup() 
+tax = tax_table(ps_mirzapur_rare)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+twoASVs_TOD = tax2 %>% filter(var == 'ASV10 (Megasphaera)')
+
+# get PD values
+plt_df = melt(otu_for_comp_PD %>% rownames_to_column('sample')) %>%
+  group_by(variable) %>%
+  mutate(value_use = value/max(value)) %>%
+  ungroup() 
+tax = tax_table(ps_mirzapur_rare)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+PD_twoASVs = tax2 %>% filter(var == 'ASV10 (Megasphaera)')
+
+twoASVs = rbind(twoASVs_TOD %>% mutate(time = 'TOD'), PD_twoASVs %>% mutate(time = 'PD'))
+twoASVs_wide = tidyr::spread(twoASVs %>% select(value_use,time,sample, Genus),
+                             key = Genus, value = value_use) %>% 
+  mutate(time = as.factor(time))
+levels(twoASVs_wide$time)[levels(twoASVs_wide$time)=="PD"] =  "pre-detection"
+levels(twoASVs_wide$time)[levels(twoASVs_wide$time)=="TOD"] =  "time-of-detection"
+
+```
+
+# Prep Plot - Fig 4F
+
+```{r}
+
+count_df_PD_mirzapur = twoASVs_wide %>% filter(time == 'pre-detection')
+count_df_TOD_mirzapur = twoASVs_wide %>% filter(time != 'pre-detection')
+df = data.frame(
+  Site = c('Mirzapur','Mirpur'),
+  Megasphaera = c(round(sum(count_df_PD_mirzapur$Megasphaera>0)/length(count_df_PD_mirzapur$Megasphaera),4)*100, round(sum(count_df_PD_mirpur$Megasphaera>0)/length(count_df_PD_mirpur$Megasphaera),4)*100))
+df = melt(df)
+# ggplot(df) + 
+#   geom_bar(aes(x = Site, y = value, fill = Site), stat = 'identity', position = "dodge") + 
+#   scale_fill_manual(values = c('black','grey'), guide = F) +
+#   ylab('Percent of samples with reads') + xlab(NULL)
+
+df_mirz = melt(rbind(count_df_PD_mirzapur, count_df_TOD_mirzapur))  %>% mutate(Site = 'Mirzapur')
+df_mir = melt(rbind(count_df_PD_mirpur %>% select(-symptomatic_use,-Collinsella,-`symptomatic?`) %>% 
+                      mutate(time = 'pre-detection'), 
+                    count_df_TOD_mirpur %>% select(-symptomatic_use,-Parabacteroides,-`symptomatic?`) %>% 
+                      mutate(time = 'time-of-detection'))) %>% mutate(Site = 'Mirpur')
+df = rbind(df_mirz,df_mir)
+
+```
+
+
+# Save data for other scripts
+
+```{r}
+
+save(list = c("df","ps_mirzapur_rare"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P5output_plot_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+
+```
+
+# Statistics
+
+```{r}
+
+t.test(df$value[df$Site == 'Mirpur'], df$value[df$Site == 'Mirzapur'])
+df = data.frame(Site = c('Mirzapur','Mirpur'),
+  Megasphaera = c(sum(count_df_PD_mirzapur$Megasphaera>0.2),sum(count_df_PD_mirpur$Megasphaera>0.2)),
+  Total = c(length(count_df_PD_mirzapur$Megasphaera),length(count_df_PD_mirpur$Megasphaera))) %>% 
+  mutate(NO_mega = Total - Megasphaera) %>% select(-Total)
+rownames(df) = df$Site; df$Site = NULL
+chisq.test(df)
+
+```
+
+# Make figures
+
+```{r}
+
+#rmarkdown::render("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/code/R_markdown/P5_mirzapur_analysis_figures.Rmd")
+
+```

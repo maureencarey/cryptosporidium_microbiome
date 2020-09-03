@@ -1,0 +1,516 @@
+---
+title: "Microbiome analysis - cohort figures"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(phyloseq); library(reshape2); library(rmarkdown)
+library(dplyr); library(tidyr); library(vegan)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
+
+# reorganizing DOB files
+DOB_df_with_study = DOB_df %>% filter(CHILDID %in% burden_mirpur$SID)
+DOB_df = DOB_df %>% filter(CHILDID %in% burden_mirpur$SID) %>% select(-study)
+left_study_ids = left_study_ids[left_study_ids>=2000 & left_study_ids <3406] # all files already have these kids removed
+rm(inflam_nih,inflam_provide,nih_antibiotics_key,nih_crypto,provide_antibiotics_key,provide_crypto)
+
+# subset for the cohort that is used for microbiome study
+all_got_crypto = all_got_crypto %>% filter(CHILDID %in% burden_mirpur$SID)
+all_kids = all_kids %>% filter(CHILDID %in% burden_mirpur$SID)
+all_pathogens = all_pathogens %>% filter(CHILDID %in% burden_mirpur$SID)
+burden_all_path = burden_all_path %>% filter(CHILDID %in% burden_mirpur$SID)
+burden_crypto = burden_crypto %>% filter(CHILDID %in% burden_mirpur$SID)
+burden_sex = burden_sex %>% filter(SID %in% burden_mirpur$SID)
+children_without_diarrhea = children_without_diarrhea %>% filter(CHILDID %in% burden_mirpur$SID)
+everything_df = everything_df %>% filter(CHILDID %in% burden_mirpur$SID)
+first_infection = first_infection %>% filter(CHILDID %in% burden_mirpur$SID) # remaining kids never had a parasite
+inflam_burden = inflam_burden %>% filter(CHILDID %in% burden_mirpur$SID)
+total_abx_c = total_abx_c %>% filter(CHILDID %in% burden_mirpur$SID)        # remaining kids never took ABx
+total_abx_c_with_diarr = total_abx_c_with_diarr %>% filter(CHILDID %in% burden_mirpur$SID)
+total_diarrhea = total_diarrhea  %>% filter(CHILDID %in% burden_mirpur$SID) # remaining kids never were sick
+crypto_cts = burden_all_path %>% filter(crypto == 1) %>%
+  mutate(date_of_collection = as.Date(gsub('.{8}$', '', as.character(DOC)), "%m/%d/%Y")) %>%
+  select(CHILDID, date_of_collection, CRYCTRT, type) %>% filter(CHILDID %in% burden_mirpur$SID)
+all_cause_diar = total_diarrhea %>% group_by(CHILDID,study) %>% summarize(episodes = n()) %>% ungroup()
+rm(burden_all_path)
+
+rm(list= ls()[! (ls() %in% c("ps","ps_rare","ps_rare_diff",'left_study_ids','SEED_INT','colors','DOB_df','burden_crypto',
+                             "burden_mirpur",'total_abx_c_with_diarr','total_diarrhea'))])
+
+```
+
+## Figure 2 - Emphasizing amount of diarrhea and antibiotic usage
+
+Figure 2A
+``` {r}
+
+df_plot = merge(DOB_df, total_diarrhea %>% group_by(CHILDID) %>% summarize(n_diarr = n()), 
+  by = "CHILDID", all = T)
+df_plot$n_diarr[is.na(df_plot$n_diarr)] = 0
+df_plot = merge(df_plot,as(sample_data(subset_samples(ps, pre_detection == F)),'data.frame'),
+                by.x = "CHILDID", by.y = "Child.ID", all = T) %>% 
+  select(CHILDID, DOB, n_diarr,symptomatic)
+
+# note: slice must be dplyr::slice with these packages
+df_plot = df_plot  %>% filter(CHILDID %in% burden_mirpur$SID)  %>%
+  group_by(CHILDID) %>% mutate(occurances = n()) %>% ungroup() %>%
+  mutate(sympt_use = ifelse(is.na(symptomatic),0,ifelse(symptomatic,2,1))) %>%
+  group_by(CHILDID) %>% mutate(val = mean(sympt_use)) %>%
+  mutate(TYPE = ifelse(val == 0, 'not in microbiome cohort',
+                       ifelse(val == 2, 'diarrheal',
+                              ifelse(val == 1, 'subclinical',
+                                     'both')))) %>%
+  dplyr::slice(1) %>% ungroup() %>%
+  select(CHILDID, n_diarr, TYPE)
+df_plot$TYPE <- factor(df_plot$TYPE, levels = c("not in microbiome cohort","subclinical","both","diarrheal"))
+df_fig2A = df_plot
+
+```
+
+Supplemental Figure 2A
+```{r}
+
+n_kids = length(unique(total_abx_c_with_diarr$CHILDID))
+to_plot = total_abx_c_with_diarr %>% mutate(age = date-DOB) %>% filter(CHILDID %in% burden_mirpur$SID) 
+df_sf2A = to_plot
+
+```
+
+Figure 2B
+```{r}
+
+crypto_symptoms = merge(burden_crypto %>% filter(CHILDID %in% burden_mirpur$SID), DOB_df %>% select(-DOB), by = "CHILDID", all = T) %>% 
+  select(-DOB, -DOC,-study,-CRYPTO_use) %>%
+  mutate(type_use = ifelse(TYPE == 'subclinical', 1, ifelse(TYPE == 'diarrheal', 2, 0))) %>% select(-TYPE) %>%
+  mutate(type = ifelse(is.na(type_use), 0, type_use)) %>%
+  group_by(CHILDID) %>% summarize(val = mean(type)) %>%
+  mutate(TYPE = ifelse(val == 0, 'never infected',
+                       ifelse(val == 2, 'diarrheal', 
+                              ifelse(val == 1, 'subclinical',
+                                     'both')))) %>%
+  select(-val)
+temp_df = merge(total_diarrhea, crypto_symptoms, by = "CHILDID", all = T)
+
+# get kids that had no diarrhea
+no_diarr = temp_df[is.na(temp_df$EPINUM),] %>% mutate(n = 0) %>% select(n, TYPE, CHILDID)
+
+# summarize for kids who had diarrhea
+yes_diarr = temp_df %>% filter(!is.na(EPINUM)) %>% group_by(CHILDID) %>% mutate( n = n()) %>% select(n, TYPE, CHILDID) %>% dplyr::slice(1) %>% ungroup()
+
+# join 
+df_plot = rbind(no_diarr, yes_diarr)
+rm(no_diarr, yes_diarr)
+df_plot$TYPE[df_plot$TYPE == "never infected"] = "no infection\ndetected"
+df_plot$TYPE <- factor(df_plot$TYPE, levels = c("no infection\ndetected","subclinical","diarrheal","both" ))
+
+df_fig2B = df_plot
+
+```
+
+Figure 2C
+```{r}
+
+crypto_symptoms = merge(burden_crypto %>% filter(CHILDID %in% burden_mirpur$SID), DOB_df %>% select(-DOB), by = "CHILDID", all = T) %>% 
+  select(-DOB, -DOC,-study,-CRYPTO_use) %>%
+  mutate(type_use = ifelse(TYPE == 'subclinical', 1, ifelse(TYPE == 'diarrheal', 2, 0))) %>% select(-TYPE) %>%
+  mutate(type = ifelse(is.na(type_use), 0, type_use)) %>%
+  group_by(CHILDID) %>% summarize(val = mean(type)) %>%
+  mutate(TYPE = ifelse(val == 0, 'no infection\ndetected',
+                       ifelse(val == 2, 'diarrheal', 
+                              ifelse(val == 1, 'subclinical',
+                                     'both')))) %>%
+  select(-val)
+temp_df = merge(total_abx_c_with_diarr %>% select(CHILDID, value_use, study, date), 
+                crypto_symptoms, by = "CHILDID", all = T)
+
+# get kids that had no abx
+no_diarr = temp_df[is.na(temp_df$value_use),] %>% mutate(n = 0) %>% select(n, TYPE, CHILDID)
+
+# summarize for kids who had abx
+yes_diarr = temp_df %>% filter(!is.na(value_use)) %>% group_by(CHILDID) %>% mutate( n = n()) %>% select(n, TYPE, CHILDID) %>% dplyr::slice(1) %>% ungroup()
+
+# join 
+df_plot = rbind(no_diarr, yes_diarr)
+rm(no_diarr, yes_diarr)
+df_plot$TYPE <- factor(df_plot$TYPE, levels = c("no infection\ndetected","subclinical","diarrheal","both" ))
+
+df_fig2C = df_plot
+
+```
+
+## Figure 3
+
+Frequent reads overall - Figure 3A + 3D
+```{r}
+
+# subset the phyloseq object to only include clinical types 1,2,10, and 12 since analyses will focus on these
+ps_for_explore = subset_samples(ps_rare, Clinical.type %in% c(1,2,10,12))
+top_quantity = 10
+rare_min = 10000
+
+# Get the most abundant ASVs across the entire dataset
+most_abundant_names = paste(1:top_quantity,tax_table(ps_for_explore)[names(sort(taxa_sums(ps_for_explore), TRUE)[1:top_quantity]),"Genus"],"")
+most_abundant_genus = tax_table(ps_for_explore)[names(sort(taxa_sums(ps_for_explore), TRUE)[1:top_quantity]),"Genus"]
+most_abundant = names(sort(taxa_sums(ps_for_explore), TRUE)[1:top_quantity])
+ps_for_abundplot = prune_taxa(most_abundant,ps_for_explore)
+readsumsdf = data.frame(nreads = sort(taxa_sums(ps_for_abundplot), TRUE), sorted = 1:ntaxa(ps_for_abundplot), 
+                        type = "OTUs")
+readsumsdf$names = factor(most_abundant_names,levels=most_abundant_names)
+readsumsdf$genus = factor(most_abundant_genus)
+rownames(readsumsdf) = NULL
+df_fig3A = readsumsdf
+ps_for_explore_fig3A = ps_for_explore
+
+## to show lack of dominance of individual microbes
+samples_df = as(sample_data(ps_for_explore),"data.frame") %>% select(symptomatic, pre_detection)
+temp_df_tax = tax_table(ps_for_explore) %>% melt()
+n_otus = otu_table(ps_for_explore) %>% melt() %>% 
+  group_by(Var1) %>% summarize(n_reads = sum(value))
+temp_df_otu = otu_table(ps_for_explore) %>% melt() %>% 
+  group_by(Var1) %>% # group by sample
+  arrange(-value) %>% dplyr::slice(1) %>% ungroup() %>% mutate(percent_reads = value/10000) %>%
+  select(-value) %>%
+  dplyr::rename(sample = Var1, ASV = Var2)
+plot_df = merge(temp_df_otu, temp_df_tax %>% filter(Var2 == 'Genus'), all.x = T, by.x = 'ASV',by.y = "Var1") %>% select(-Var2)
+colnames(plot_df)[colnames(plot_df) == 'value'] = 'Genus'
+replacement = temp_df_tax %>%  filter(Var1 == plot_df[is.na(plot_df$Genus),1], Var2 == 'Order') %>% select(value)
+plot_df$Genus = as.character(plot_df$Genus)
+plot_df[is.na(plot_df$Genus),4] = paste0('[o]',replacement$value[[1]] %>% as.character())
+plot_df$Genus = as.factor(plot_df$Genus)
+rownames(plot_df) = plot_df$Var1
+alt_df = cbind(plot_df, samples_df)
+
+plot_df_stats = alt_df %>% mutate(grps = paste0(symptomatic,pre_detection))
+res.aov <- aov(percent_reads ~ symptomatic +pre_detection, data = alt_df)
+summary(res.aov)
+
+## to demonstrate issue with sample-to-sample diversity, plot the number of samples containing each ASV
+taxa_counts = sort(colSums(otu_table(ps_for_explore) > 1),TRUE)[1:top_quantity] # number of samples each ASV is in, taking top 25
+highest_sample_count_names = paste(1:top_quantity,tax_table(ps_for_explore)[names(sort(colSums(otu_table(ps_for_explore) > 1),TRUE)[1:top_quantity]),"Genus"],"")
+highest_sample_count_genus = tax_table(ps_for_explore)[names(sort(colSums(otu_table(ps_for_explore) > 1),TRUE)[1:top_quantity]),"Genus"]
+highest_sample_count = names(sort(colSums(otu_table(ps_for_explore) > 1),TRUE)[1:top_quantity])
+ps_for_countplot = prune_taxa(highest_sample_count,ps_for_explore)
+countsumsdf = data.frame(nsamples = sort(colSums(otu_table(ps_for_explore) > 1),TRUE)[1:top_quantity], sorted = 1:ntaxa(ps_for_countplot), 
+                        type = "OTUs")
+countsumsdf$names = factor(highest_sample_count_names,levels=highest_sample_count_names)
+countsumsdf$genus = factor(highest_sample_count_genus)
+df_fig3D = countsumsdf
+
+## how does this change if we merge by genus?
+ps_rare_bygenus = tax_glom(ps_for_explore,taxrank="Genus")
+taxa_counts = sort(colSums(otu_table(ps_rare_bygenus) > 1),TRUE)[1:top_quantity] # number of samples each ASV is in, taking top 25
+highest_sample_count_names = paste(1:top_quantity,tax_table(ps_rare_bygenus)[names(sort(colSums(otu_table(ps_rare_bygenus) > 1),TRUE)[1:top_quantity]),"Genus"],"")
+highest_sample_count_genus = tax_table(ps_rare_bygenus)[names(sort(colSums(otu_table(ps_rare_bygenus) > 1),TRUE)[1:top_quantity]),"Genus"]
+highest_sample_count = names(sort(colSums(otu_table(ps_rare_bygenus) > 1),TRUE)[1:top_quantity])
+ps_for_countplot = prune_taxa(highest_sample_count,ps_rare_bygenus)
+countsumsdf = data.frame(nsamples = sort(colSums(otu_table(ps_rare_bygenus) > 1),TRUE)[1:top_quantity], sorted = 1:ntaxa(ps_for_countplot), type = "OTUs")
+countsumsdf$names = factor(highest_sample_count_names,levels=highest_sample_count_names)
+countsumsdf$genus = factor(highest_sample_count_genus)
+alt_countsumsdf = countsumsdf
+ps_rare_bygenus_alt_fig = ps_rare_bygenus
+
+```
+
+Richness and Evenness - Figure 2B and 2C
+
+```{r}
+
+# First, demonstrate the difference in alpha diversity in clinical vs. sublinical children
+ps_for_alpha = ps_rare
+
+# only include codes 1, 10, (pre and post diarrheal) 2, and 12 (pre and post non-diarrheal)
+ps_for_alpha = prune_samples(sample_data(ps_for_alpha)$Clinical.type %in% c(1,10,2,12),ps_for_alpha)
+#infection_labeller = list("FALSE"="Uninfected","TRUE"="Infected")
+# change infected label from True/False to infected/uninfected
+tempsampledata = sample_data(ps_for_alpha)
+tempsampledata$Clinical.type = as.factor(tempsampledata$Clinical.type)
+sample_data(ps_for_alpha) = tempsampledata
+
+# prep for stats
+richness = estimate_richness(ps_for_alpha,measures="Observed")
+row.names(richness) = gsub("X","",row.names(richness)) # for some reason, estimate richness adds an "X" at the beginneing of row names.
+asdf = as(sample_data(ps_for_alpha),"data.frame")
+asdf = merge(asdf,richness,by="row.names")
+clinical_anova = aov(Observed~Clinical.type,data=asdf)
+clinical_tukey_posthoc_richness = TukeyHSD(clinical_anova)
+
+evenness = estimate_richness(ps_for_alpha,measures="InvSimpson")
+asdf = as(sample_data(ps_for_alpha),"data.frame")
+asdf = merge(asdf,evenness,by="row.names")
+clinical_anova = aov(InvSimpson~Clinical.type,data=asdf)
+clinical_tukey_posthoc_evenness = TukeyHSD(clinical_anova)
+
+# save the anova results
+saveRDS(clinical_tukey_posthoc_evenness, "/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/InvSimpson_anova_posthoc_Mirpur.rds")
+saveRDS(clinical_tukey_posthoc_richness, "/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/Observed_anova_posthoc_Mirpur.rds")
+
+```
+
+## Figure 4A
+
+```{r}
+
+# Samples are too distinct from each other NMDS to converge, so let's use PCoA
+ps_rare_for_beta = ps_rare
+ps_rare_for_beta = prune_samples(sample_data(ps_rare_for_beta)$Clinical.type %in% c(1,2,10,12),ps_rare_for_beta)
+
+# get samples with fewer than 5 non-zero OTUs
+nonzero_count = apply(otu_table(ps_rare_for_beta), 1, function(c)sum(c!= 0))
+ps_rare_for_beta = prune_samples(nonzero_count > 5, ps_rare_for_beta)
+ps_rare_for_beta = transform_sample_counts(ps_rare_for_beta, function(x) x / sum(x) )
+
+levels(sample_data(ps_rare_for_beta)$Clinical.type) = c(1,1,10,12)
+# ordination
+ps_rare.ord = phyloseq::ordinate(ps_rare_for_beta,  method="PCoA", distance = "euclidean")#,distance = "bray", trymax=100,k=2)
+d = ps_rare.ord$vectors
+grps = as(sample_data(ps_rare_for_beta), "data.frame") %>% select(symptomatic, pre_detection) %>% 
+  mutate(group_use = paste(symptomatic,pre_detection, sep = '_'))
+adon.results<-adonis(d ~ grps$symptomatic + grps$pre_detection, method="euclidean",perm=999)
+print(adon.results)
+
+```
+
+## Figure 3, focusing on Abx
+
+```{r}
+
+# prep data for if a kid had no abx
+kids_IDs = as(sample_data(ps_rare),"data.frame") %>% 
+  select(Child.ID, Date.of.collection,symptomatic,pre_detection) %>% 
+  filter(pre_detection == F) %>% select(-pre_detection)
+kids_IDs$Child.ID = as.integer(as.character(kids_IDs$Child.ID))
+kids_IDs_all = as(sample_data(ps_rare),"data.frame") %>% 
+  select(Child.ID, Date.of.collection,symptomatic,pre_detection)
+kids_IDs_all$Child.ID = as.integer(as.character(kids_IDs_all$Child.ID))
+
+# count abx events
+tempsampledata = as(sample_data(ps_rare),"data.frame") %>% 
+                  select(Child.ID, sample.id, Number.of.crypto.positive.events,Date.of.birth, 
+                         Date.of.collection, symptomatic, pre_detection)
+temp_df1 = merge(tempsampledata, (total_abx_c_with_diarr %>% select(CHILDID, value, date)), 
+                all.x = T, by.x = "Child.ID", by.y = "CHILDID")
+temp_df1 = temp_df1 %>% 
+  dplyr::rename(Date.of.drug = date, drug = value)
+
+temp_df = temp_df1 %>% mutate(drug_used_X_days_before_crypto = as.numeric(Date.of.collection - Date.of.drug)) %>%
+  filter(drug_used_X_days_before_crypto >= 0) %>% # only antibiotics used before crypto event
+  select(-Date.of.drug) %>%
+  group_by(Child.ID, sample.id, Number.of.crypto.positive.events,Date.of.birth, 
+                         Date.of.collection, symptomatic, pre_detection,drug) %>%
+  mutate(n_uses = n(), min_drug_used_X_days_before_crypto = min(drug_used_X_days_before_crypto)) %>% ungroup() %>%
+  select(-drug_used_X_days_before_crypto) %>% distinct()
+
+temp_df_month = temp_df1 %>% mutate(drug_used_X_days_before_crypto = as.numeric(Date.of.collection - Date.of.drug)) %>%
+  filter(drug_used_X_days_before_crypto >= 0 & drug_used_X_days_before_crypto < 32) %>% # only antibiotics w/i 1 mo & used before crypto event
+  select(-Date.of.drug) %>%
+  group_by(Child.ID, sample.id, Number.of.crypto.positive.events,Date.of.birth, 
+                         Date.of.collection, symptomatic, pre_detection,drug) %>%
+  mutate(n_uses = n(), min_drug_used_X_days_before_crypto = min(drug_used_X_days_before_crypto)) %>% ungroup() %>%
+  select(-drug_used_X_days_before_crypto) %>% distinct()
+rm(temp_df1)
+num_abx_epi = temp_df %>% group_by(Child.ID, sample.id, Number.of.crypto.positive.events,Date.of.birth, 
+                         Date.of.collection, symptomatic, pre_detection) %>% mutate(n_abx_doses = sum(n_uses)) %>%
+  ungroup() %>% select(-drug,-n_uses, -min_drug_used_X_days_before_crypto) %>% distinct()
+
+num_abx_epi_month = temp_df_month %>% 
+  group_by(Child.ID, sample.id, Number.of.crypto.positive.events,Date.of.birth, 
+                         Date.of.collection, symptomatic, pre_detection) %>% mutate(n_abx_doses = sum(n_uses)) %>%
+  ungroup() %>% select(-drug,-n_uses, -min_drug_used_X_days_before_crypto) %>% distinct()
+
+```
+
+Do all kids have at least one abx between predetction and time of detection???
+
+```{r}
+
+temp_df2 = merge(num_abx_epi, kids_IDs_all, by = c("Child.ID","Date.of.collection","symptomatic","pre_detection"), all = T)
+temp_df2$n_abx_doses[is.na(temp_df2$n_abx_doses)] = 0
+temp_df2$Number.of.crypto.positive.events = as.numeric(as.character(temp_df2$Number.of.crypto.positive.events))
+temp_df2 = temp_df2 %>% group_by(Child.ID, Number.of.crypto.positive.events, Date.of.birth) %>% 
+  mutate(abx_between_samples = ifelse(min(n_abx_doses) != max(n_abx_doses), 1, 0)) %>% 
+  ungroup() %>% filter(pre_detection == T)
+#stats
+tbl = table(temp_df2 %>% select(symptomatic,abx_between_samples))
+chisq.test(tbl)
+melted_tbl = melt(tbl)
+melted_tbl$symptomatic = as.factor(melted_tbl$symptomatic)
+levels(melted_tbl$symptomatic) <- list(subclinical="FALSE", diarrheal="TRUE")
+melted_tbl$abx_between_samples = as.factor(melted_tbl$abx_between_samples)
+levels(melted_tbl$abx_between_samples) <- list(no="0", yes="1")
+df_abx_between = melted_tbl 
+
+```
+
+Do sympotmatic kids have more abx before time_of_detection sample? 
+
+```{r}
+
+temp_df2 = merge(num_abx_epi, kids_IDs_all, by = c("Child.ID","Date.of.collection","symptomatic","pre_detection"), all = T) 
+keep_for_rf_all_abx = temp_df2
+temp_df2 = temp_df2 %>% filter(pre_detection == F)
+temp_df2$n_abx_doses[is.na(temp_df2$n_abx_doses)] = 0
+keep_for_rf_all_abx$n_abx_doses[is.na(keep_for_rf_all_abx$n_abx_doses)] = 0
+t.test(x = temp_df2[temp_df2$symptomatic == T,c('n_abx_doses')], y = temp_df2[temp_df2$symptomatic == F,c('n_abx_doses')])
+temp_df2$symptomatic = as.factor(temp_df2$symptomatic)
+levels(temp_df2$symptomatic) <- list(subclinical="FALSE", diarrheal="TRUE")
+keep_for_rf_all_abx$symptomatic = as.factor(keep_for_rf_all_abx$symptomatic)
+levels(keep_for_rf_all_abx$symptomatic) <- list(subclinical="FALSE", diarrheal="TRUE")
+df_abx_total = temp_df2
+
+```
+
+Do sympotmatic kids have more abx before time_of_detection sample MONTH PRIOR ONLY? 
+
+```{r}
+
+temp_df2 = merge(num_abx_epi_month, kids_IDs_all, by = c("Child.ID","Date.of.collection","symptomatic","pre_detection"), all = T) 
+keep_for_rf_all_abx = temp_df2
+temp_df2 = temp_df2 %>% filter(pre_detection == F)
+temp_df2$n_abx_doses[is.na(temp_df2$n_abx_doses)] = 0
+keep_for_rf_all_abx$n_abx_doses[is.na(keep_for_rf_all_abx$n_abx_doses)] = 0
+t.test(x = temp_df2[temp_df2$symptomatic == T,c('n_abx_doses')], y = temp_df2[temp_df2$symptomatic == F,c('n_abx_doses')])
+temp_df2$symptomatic = as.factor(temp_df2$symptomatic)
+levels(temp_df2$symptomatic) <- list(subclinical="FALSE", diarrheal="TRUE")
+keep_for_rf_all_abx$symptomatic = as.factor(keep_for_rf_all_abx$symptomatic)
+levels(keep_for_rf_all_abx$symptomatic) <- list(subclinical="FALSE", diarrheal="TRUE")
+df_abx_month = temp_df2
+
+```
+
+What happens if we break this down to look at a single drug at a time?
+
+```{r}
+
+num_abx_epi_per_drug = temp_df %>% group_by(Child.ID, sample.id, Number.of.crypto.positive.events,Date.of.birth, 
+                         Date.of.collection, symptomatic, pre_detection) %>% mutate(n_distinct_abx = n()) %>%
+  ungroup() %>% select(-min_drug_used_X_days_before_crypto) %>% distinct()
+num_abx_epi_per_drug = merge(num_abx_epi_per_drug, kids_IDs_all, by = c("Child.ID","Date.of.collection","symptomatic","pre_detection"), all = T)
+# replace missing values
+num_abx_epi_per_drug$n_uses[is.na(num_abx_epi_per_drug$n_uses)] = 0
+num_abx_epi_per_drug$n_distinct_abx[is.na(num_abx_epi_per_drug$n_distinct_abx)] = 0
+# easier to replace missing values by coverting to wide 
+num_abx_epi_per_drug = num_abx_epi_per_drug %>% select(-sample.id,-Number.of.crypto.positive.events, -Date.of.birth)
+num_abx_epi_per_drug$Child.ID = as.integer(as.character(num_abx_epi_per_drug$Child.ID))
+stats_df1 = tidyr::spread(num_abx_epi_per_drug %>% filter(), drug, n_uses); stats_df1[,ncol(stats_df1)] = NULL
+stats_df1[is.na(stats_df1)] = 0
+keep_for_rf_each_abx = stats_df1
+stats_df2 = num_abx_epi_per_drug %>% select(-drug,-n_uses)
+#stats
+for (x in unique(stats_df1$drug)) {
+  if (x != "Syp, Mebendazole") {
+  temp_df3 = stats_df1 %>% filter(drug == x, pre_detection == F)
+  res = t.test(x = temp_df3[temp_df3$symptomatic == T,c('n_uses')], y = temp_df3[temp_df3$symptomatic == F,c('n_uses')])
+  if (res$p.value < 0.05) { print(x)}
+  }}
+melted_stats_df1 = melt(stats_df1, id.vars = c('Child.ID','Date.of.collection','symptomatic','pre_detection','n_distinct_abx'))
+plt_df = melted_stats_df1 %>% filter(pre_detection == F)
+plt_df$symptomatic = as.factor(plt_df$symptomatic)
+levels(plt_df$symptomatic) <- list(subclinical="FALSE", diarrheal="TRUE")
+levels(plt_df$variable) <- list(Cefixime="Cefixime sup (Cef-3)", Nystatin="Nystatin Suspension",
+                                Amoxycillin="Syp. Amoxycillin",Azythromycin="Syp. Azythromycin",
+                                Ciprofloxacin="Syp. Ciprofloxacin",Cotrimoxasole="Syp. Cotrimoxasole",
+                                Erythromycin="Syp. Erythromycin",Mebendazole = "Syp, Mebendazole",
+                                Flucloxacillin="Syp. Flucloxacillin",Metronidzole="Syp. Metronidzole",
+                                `Nalidixic acid`="Syp. Nalidixic acid",Albendazole="Tab. Albendazole")
+df_individual_abx = plt_df
+
+```
+
+# Save Abx history for other scripts
+
+```{r}
+
+save(list = c("keep_for_rf_all_abx","keep_for_rf_each_abx"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_" , format(Sys.time(), "%Y_%m_%d")),".RData")) 
+
+```
+
+Also check number of distinct antibiotics
+
+```{r}
+
+t.test(x = stats_df2[stats_df2$symptomatic == T,c('n_distinct_abx')], y = stats_df2[stats_df2$symptomatic == F,c('n_distinct_abx')])
+plt_df = stats_df2 %>% filter(pre_detection == F)
+plt_df$symptomatic = as.factor(plt_df$symptomatic)
+levels(plt_df$symptomatic) <- list(subclinical="FALSE", diarrheal="TRUE")
+df_distinct_abx = plt_df
+
+#log model symptoms ~ X1 * n_uses_abx1 + X2 * n_uses_abx2 + ...
+#long to wide format spread(data, key, value)
+wide_df1 = tidyr::spread(num_abx_epi_per_drug %>% filter(pre_detection == F) %>% 
+                           select(Child.ID,Date.of.collection,symptomatic,drug,n_uses),
+                         drug, n_uses)
+wide_df2 = num_abx_epi_per_drug %>% filter(pre_detection == F) %>%
+  select(Child.ID,Date.of.collection,symptomatic,n_distinct_abx) %>% distinct() 
+wide_df1[is.na(wide_df1)] = 0
+wide_df1$Child.ID = as.integer(as.character(wide_df1$Child.ID)); wide_df2$Child.ID = as.integer(as.character(wide_df2$Child.ID))
+wide_df = merge(merge(wide_df1, wide_df2, by = c("Child.ID","Date.of.collection","symptomatic"), all = T), kids_IDs, 
+                by = c("Child.ID","Date.of.collection","symptomatic"), all = T) 
+wide_df[is.na(wide_df)] = 0
+wide_df[,colnames(wide_df) == "<NA>"] = NULL
+wide_df$symptomatic = as.factor(as.numeric(wide_df$symptomatic))
+data_for_model = wide_df %>% select(-Child.ID,-Date.of.collection)
+colnames(data_for_model)[colnames(data_for_model) == "Cefixime sup (Cef-3)"] = "Cefixime"
+colnames(data_for_model)[colnames(data_for_model) == "Nystatin Suspension"] = "Nystatin"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Amoxycillin"] = "Amoxycillin"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Azythromycin"] = "Azythromycin"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Ciprofloxacin"] = "Ciprofloxacin"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Cotrimoxasole"] = "Cotrimoxasole"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Erythromycin"] = "Erythromycin"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Flucloxacillin"] = "Flucloxacillin"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Metronidzole"] = "Metronidzole"
+colnames(data_for_model)[colnames(data_for_model) == "Syp. Nalidixic acid"] = "Nalidixic_acid"
+colnames(data_for_model)[colnames(data_for_model) == "Tab. Albendazole"] = "Albendazole"
+abx_model = glm(data_for_model$symptomatic~.,family=binomial(link='logit'),data=data_for_model %>% select(-symptomatic))
+summary(abx_model)
+
+# rf = randomForest(data_for_model %>% select(-symptomatic), data_for_model$symptomatic,
+#                   importance = TRUE, ntree = 10000, replace=TRUE, nodesize=1,
+#                   classwt=c(10,0.00015))
+# extracted_importance = importance(rf,type=2) # type 2 = node impurity, more useful for auc
+# extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
+# top10 = tail(extracted_importance,10)
+# names(top10)
+# predictions = as.data.frame(predict(rf,type="prob"))
+# predictions$predict <- names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+# predictions$observed <- data_for_model$symptomatic
+# roc <- roc(ifelse(predictions$observed==0, 0, 1), as.numeric(predictions$`0`))
+# plot(roc, col = "gray60")
+# AUC = auc(roc)
+# AUC
+
+```
+
+# Save data for other scripts
+
+```{r}
+
+save(list = c("df_fig2A","df_sf2A", "df_fig2B","df_fig2C","df_fig3A","ps_for_explore_fig3A","alt_df","df_fig3D","alt_countsumsdf","ps_rare_bygenus_alt_fig","ps_for_alpha","ps_rare_for_beta","ps_rare.ord","df_abx_between","df_abx_total","df_abx_month","df_individual_abx","df_distinct_abx","abx_model"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_plot_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+
+```
+
+# Make figures
+
+```{r}
+
+#rmarkdown::render("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/code/R_markdown/P2_cohort_figures.Rmd")
+
+```
+

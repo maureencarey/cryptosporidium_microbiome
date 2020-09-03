@@ -1,0 +1,184 @@
+---
+title: "Microbiome analysis - univariate statistics"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(phyloseq); library(reshape2); library(tibble); library(rmarkdown)
+library(dplyr); library(tidyr); library(DESeq2); library(ashr); library(ggrepel)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p1_2020_09_02.RData")
+
+```
+
+# Univariate statistics
+
+```{r}
+
+# top10_TOD
+# top10_PD
+
+# subset to PD v TOD
+ps_rare_diff_temp_PD = subset_samples(for_stats, pre_detection == T)
+ps_rare_diff_temp_TOD = subset_samples(for_stats, pre_detection == F)
+
+# remove very rare ASVs
+nonzero_count = apply(otu_table(ps_rare_diff_temp_PD), 1, function(c)sum(c!= 0))
+ps_rare_diff_temp_PD = prune_samples(nonzero_count > 5, ps_rare_diff_temp_PD)
+nonzero_count = apply(otu_table(ps_rare_diff_temp_TOD), 1, function(c)sum(c!= 0))
+ps_rare_diff_temp_TOD = prune_samples(nonzero_count > 5, ps_rare_diff_temp_TOD)
+
+# transpose and replace zeros
+predetection_count = t(otu_table(ps_rare_diff_temp_PD))
+predetection_count[predetection_count == 0] = 1
+TOD_count = t(otu_table(ps_rare_diff_temp_TOD))
+TOD_count[TOD_count == 0] = 1
+
+# make sample data more managable
+predetection_sample_data = as(sample_data(ps_rare_diff_temp_PD),"data.frame") %>% 
+  select(Child.ID, symptomatic, pre_detection)
+TOD_sample_data = as(sample_data(ps_rare_diff_temp_TOD),"data.frame") %>% 
+  select(Child.ID, symptomatic, pre_detection)
+
+```
+
+# DESeq2
+
+```{r}
+
+# make DESeq obj
+dds_PD <- DESeqDataSetFromMatrix(countData = as.data.frame(predetection_count),
+                              colData = predetection_sample_data,
+                              design= ~symptomatic)
+dds_TOD <- DESeqDataSetFromMatrix(countData = as.data.frame(TOD_count),
+                                 colData = TOD_sample_data,
+                                 design= ~symptomatic)
+dds_PD = DESeq(dds_PD)
+dds_TOD = DESeq(dds_TOD)
+
+# shrinkage
+# because we are interested in treated vs untreated, we set 'coef=2'
+resNorm_PD <- lfcShrink(dds_PD, coef=2, type="ashr") # resultsNames(dds_proc)[2]
+resNorm_TOD <- lfcShrink(dds_TOD, coef=2, type="ashr") # resultsNames(dds_proc)[2]
+
+#resOrdered <- resNorm_PD[order(resNorm_PD$pvalue),]
+summary(resNorm_PD)
+summary(resNorm_TOD)
+
+```
+
+# Prep predetection volcano plot
+
+```{r}
+
+# Create the volcano plot - PREP FOR PREDETECTION
+resNorm_PD_df = as.data.frame(resNorm_PD) %>% 
+  rownames_to_column('ASV') %>%
+  mutate(col = ifelse(padj<0.05,1,0),
+         lab = ifelse(log2FoldChange>1.5 | abs(log2FoldChange) > 2,1,0),
+         sig = -log10(padj))
+sum(is.infinite(resNorm_PD_df$sig))
+sum(is.na(resNorm_PD_df$sig))
+resNorm_PD_df = resNorm_PD_df %>% mutate(padj = ifelse(is.na(padj),pvalue,padj),
+                                         sig = ifelse(is.na(sig),0,-log10(pvalue)),
+                                         col = ifelse(is.na(col),0,col),
+                                         lab = ifelse(is.na(lab),0,lab))
+#resNorm_PD[is.infinite(resNorm_PD$sig),"sig"] <- 350
+sum(is.na(resNorm_PD_df$pvalue))
+sum(is.infinite(resNorm_PD_df$pvalue))
+#genes.to.plot <- !is.na(resNorm_PD$pvalue)
+
+# Label ASVs
+tax = tax_table(ps_rare_diff_temp_PD)
+tax = tax[rownames(tax) %in% resNorm_PD_df$ASV,]
+tax = merge(tax,resNorm_PD_df, by.x= 'row.names', by.y = "ASV", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus),paste0('[f] ',Family),Genus)))
+
+tax2 = merge(merge(tax2, as.data.frame(top10_PD)%>% rownames_to_column('Row.names'), by = "Row.names", all = T),
+             as.data.frame(top10_TOD)%>% rownames_to_column('Row.names'), by = "Row.names", all = T)
+tax2 = tax2 %>% 
+  mutate(col2 = ifelse(col == 0, 'non sig',ifelse(!is.na(top10_TOD) & !is.na(top10_PD),'sig but dif color','sig')),
+         size2 = ifelse(!is.na(top10_PD),1,0))
+
+predetection_tax2 = tax2
+
+```
+
+# Prep time-of-detection volcano plot
+
+```{r}
+
+# Create the volcano plot - PREP FOR TIME OF DETECTION
+resNorm_PD_df = as.data.frame(resNorm_TOD) %>% 
+  rownames_to_column('ASV') %>%
+  mutate(col = ifelse(padj<0.05,1,0),
+         lab = ifelse(log2FoldChange>2.5 | abs(log2FoldChange) > 2.5,1,0),
+         sig = -log10(padj))
+sum(is.infinite(resNorm_PD_df$sig))
+sum(is.na(resNorm_PD_df$sig))
+resNorm_PD_df = resNorm_PD_df %>% mutate(padj = ifelse(is.na(padj),pvalue,padj),
+                                         sig = ifelse(is.na(sig),0,-log10(pvalue)),
+                                         col = ifelse(is.na(col),0,col),
+                                         lab = ifelse(is.na(lab),0,lab))
+#resNorm_PD[is.infinite(resNorm_PD$sig),"sig"] <- 350
+sum(is.na(resNorm_PD_df$pvalue))
+sum(is.infinite(resNorm_PD_df$pvalue))
+#genes.to.plot <- !is.na(resNorm_PD$pvalue)
+
+# Label ASVs
+tax = tax_table(ps_rare_diff_temp_TOD)
+tax = tax[rownames(tax) %in% resNorm_PD_df$ASV,]
+tax = merge(tax,resNorm_PD_df, by.x= 'row.names', by.y = "ASV", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus),paste0('[f] ',Family),Genus)))
+tax2 = merge(merge(tax2, as.data.frame(top10_TOD)%>% rownames_to_column('Row.names'), by = "Row.names", all = T),
+             as.data.frame(top10_PD)%>% rownames_to_column('Row.names'), by = "Row.names", all = T)
+#tax2 = tax2 %>% mutate(col2 = ifelse(!is.na(top10_TOD > 0), ifelse(!is.na(top10_PD > 0), 'imp (both)', 'imp, TOD only'), ifelse(col == 0, 'insig', 'sig')))
+tax2 = tax2 %>% 
+  mutate(col2 = ifelse(col == 0, 'non sig',ifelse(!is.na(top10_TOD) & !is.na(top10_PD),'sig but dif color','sig')),
+         size2 = ifelse(!is.na(top10_TOD),1,0))
+
+tod_tax2 = tax2
+
+```
+
+# Save data for other scripts
+
+```{r}
+
+save(list = c("predetection_tax2","tod_tax2"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P4output_plot_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+
+```
+
+# Make figures
+```{r}
+
+#rmarkdown::render("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/code/R_markdown/P4_univariate_stats_figures.Rmd")
+
+```

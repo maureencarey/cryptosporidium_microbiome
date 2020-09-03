@@ -1,0 +1,478 @@
+---
+title: "Microbiome analysis - data prep"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+Metadata variables: Metadata variables included age-related information (month/year of birth, age in days), socio-economic status (income, perceived food deficit), time of collection (month, year, amount of rainfall that month), the child’s home conditions (presence of an indoor drain, drinking water source, water treatment method, number of children under the age of 5 years), coinfection status (positive qPCR for Giardia spp. or E. histolytica), repeat infection v. primary infection, and growth status (z-scores for weight-for-age, height-for-age, weight-for-height, and body mass index for age). These are known to influence the development of diarrhea broadly or the acquisition of Cryptosporidium (Korpe et al. 2016; Steiner et al. 2018; Mondal et al. 2012)
+
+Code for reference:
+/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/open_and_save_all_data.Rmd to generate /Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData
+
+The above code processes the private patient metadata and so cannot be shared at this point.
+
+# Load data and packages
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(phyloseq); library(reshape2); library(tibble)
+library(rmarkdown); library(dplyr); library(tidyr)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
+
+# reorganizing DOB files
+DOB_df_with_study = DOB_df %>% filter(CHILDID %in% burden_mirpur$SID)
+DOB_df = DOB_df %>% filter(CHILDID %in% burden_mirpur$SID) %>% select(-study)
+left_study_ids = left_study_ids[left_study_ids>=2000 & left_study_ids <3406] # all files already have these kids removed
+
+# subset for the cohort that is used for microbiome study
+all_got_crypto = all_got_crypto %>% filter(CHILDID %in% burden_mirpur$SID)
+all_kids = all_kids %>% filter(CHILDID %in% burden_mirpur$SID)
+all_pathogens = all_pathogens %>% filter(CHILDID %in% burden_mirpur$SID)
+burden_all_path = burden_all_path %>% filter(CHILDID %in% burden_mirpur$SID)
+burden_crypto = burden_crypto %>% filter(CHILDID %in% burden_mirpur$SID)
+burden_sex = burden_sex %>% filter(SID %in% burden_mirpur$SID)
+children_without_diarrhea = children_without_diarrhea %>% filter(CHILDID %in% burden_mirpur$SID)
+everything_df = everything_df %>% filter(CHILDID %in% burden_mirpur$SID)
+first_infection = first_infection %>% filter(CHILDID %in% burden_mirpur$SID) # remaining kids never had a parasite
+inflam_burden = inflam_burden %>% filter(CHILDID %in% burden_mirpur$SID)
+total_abx_c = total_abx_c %>% filter(CHILDID %in% burden_mirpur$SID)        # remaining kids never took ABx
+total_abx_c_with_diarr = total_abx_c_with_diarr %>% filter(CHILDID %in% burden_mirpur$SID)
+total_diarrhea = total_diarrhea  %>% filter(CHILDID %in% burden_mirpur$SID) # remaining kids never were sick
+crypto_cts = burden_all_path %>% filter(crypto == 1) %>%
+  mutate(date_of_collection = as.Date(gsub('.{8}$', '', as.character(DOC)), "%m/%d/%Y")) %>%
+  select(CHILDID, date_of_collection, CRYCTRT, type) %>% filter(CHILDID %in% burden_mirpur$SID)
+all_cause_diar = total_diarrhea %>% group_by(CHILDID,study) %>% summarize(episodes = n()) %>% ungroup()
+
+rm(list= ls()[! (ls() %in% c('left_study_ids','SEED_INT','colors','DOB_df',"burden_mirpur",'everything_df','total_diarrhea','burden_sex','crypto_cts'))])
+
+```
+
+# Generate supplemental file 1B to get read counts
+
+```{r}
+
+unadjusted_files_r1 = read.table("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/starting_seqs_run1.csv", 
+                                 sep = ",", header = T, stringsAsFactors = F)
+unadjusted_files_r2 = read.table("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/starting_seqs_run2.csv", 
+                                 sep = ",", header = T, stringsAsFactors = F)
+unadjusted_files_r1$X = NULL; unadjusted_files_r2$X = NULL
+run1 = read.table("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/track_reads_run1.csv", 
+                  sep = ",", header = T, stringsAsFactors = F); colnames(run1)[colnames(run1) == 'X'] = 'sample'
+run2 = read.table("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/track_reads_run2.csv", 
+                  sep = ",", header = T, stringsAsFactors = F); colnames(run2)[colnames(run2) == 'X'] = 'sample'
+df1 = merge(run1, unadjusted_files_r1, by = "sample", all = T)
+df2 = merge(run2, unadjusted_files_r2, by = "sample", all = T)
+df = rbind(df1, df2); rm(df1, df2, run1, run2, unadjusted_files_r1, unadjusted_files_r2)
+
+df_plot = melt(df %>% filter(!is.na(input))) %>% filter(variable %in% c("forward","input","filtered","nonchim"))
+df_plot$variable = plyr::revalue(df_plot$variable, c("forward"="raw reads","input"="after adapter/\nprimer trimming", "filtered"="after quality\nfiltration", "nonchim"="after merging forward &\nreverse reads"))
+df_plot$variable = factor(df_plot$variable, levels = c("raw reads","after adapter/\nprimer trimming", "after quality\nfiltration", "after merging forward &\nreverse reads"), ordered = T)
+df_mean = df_plot %>% group_by(variable) %>% summarize(mean = mean(value), median = median(value))
+
+df_summary = df
+read_count_stats_df = df_mean
+read_counts_df = df_plot
+
+```
+
+## Reading the phyloseq object
+
+Read in the phyloseq object generated via dada2. Remove any mitochondrial or chloroplast reads.
+
+```{r}
+
+ps = readRDS("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/ps_2020_08_12.rds")
+
+# Quality control - remove mitochondrial and chloroplast reads
+og_taxa = data.frame(tax_table(ps))
+# first remove non-bacteria
+keep = rownames(og_taxa[og_taxa$Kingdom %in% c("Bacteria","Archaea"),])
+ps = prune_taxa(keep,ps)
+keep = rownames(og_taxa[og_taxa$Family != "Mitochondria",])
+ps = prune_taxa(keep,ps)
+keep = rownames(og_taxa[og_taxa$Class != "Chloroplast",])
+ps = prune_taxa(keep,ps)
+
+rm(df, keep, og_taxa)
+
+```
+
+Prep plot positive controls
+
+```{r}
+
+pos_controls1 = subset_samples(ps, startsWith(rownames(sample_data(ps)), 'pos') & endsWith(rownames(sample_data(ps)), 'run1'))
+pos_controls2 = subset_samples(ps, startsWith(rownames(sample_data(ps)), 'pos') & endsWith(rownames(sample_data(ps)), 'run2'))
+rare_min = 10000
+pos_controls1= rarefy_even_depth(pos_controls1,sample.size=rare_min,rngseed=SEED_INT)
+pos_controls2= rarefy_even_depth(pos_controls2,sample.size=rare_min,rngseed=SEED_INT)
+
+# run 1
+pos_controls = pos_controls1; top_quantity = 16
+# Get the most abundant ASVs across the entire dataset
+most_abundant_names = paste(1:top_quantity,
+                            tax_table(pos_controls)[names(sort(taxa_sums(pos_controls),TRUE)[1:top_quantity]),"Genus"],"")
+most_abundant_genus = tax_table(pos_controls)[names(sort(taxa_sums(pos_controls), TRUE)[1:top_quantity]),"Genus"]
+most_abundant = names(sort(taxa_sums(pos_controls), TRUE)[1:top_quantity])
+ps_for_abundplot = prune_taxa(most_abundant,pos_controls)
+readsumsdf = data.frame(nreads = sort(taxa_sums(ps_for_abundplot), TRUE), sorted = 1:ntaxa(ps_for_abundplot),  type = "OTUs")
+readsumsdf$names = factor(most_abundant_names,levels=most_abundant_names)
+readsumsdf$genus = factor(most_abundant_genus)
+rownames(readsumsdf) = NULL
+
+plot_run1 = readsumsdf
+rm(pos_controls, top_quantity,most_abundant_names, most_abundant, most_abundant_genus,ps_for_abundplot,
+   readsumsdf)
+
+# run 2
+pos_controls = pos_controls2; top_quantity = 15
+# Get the most abundant ASVs across the entire dataset
+most_abundant_names = paste(1:top_quantity,
+                            tax_table(pos_controls)[names(sort(taxa_sums(pos_controls),TRUE)[1:top_quantity]),"Genus"],"")
+most_abundant_genus = tax_table(pos_controls)[names(sort(taxa_sums(pos_controls), TRUE)[1:top_quantity]),"Genus"]
+most_abundant = names(sort(taxa_sums(pos_controls), TRUE)[1:top_quantity])
+ps_for_abundplot = prune_taxa(most_abundant,pos_controls)
+readsumsdf = data.frame(nreads = sort(taxa_sums(ps_for_abundplot), TRUE), sorted = 1:ntaxa(ps_for_abundplot),  type = "OTUs")
+readsumsdf$names = factor(most_abundant_names,levels=most_abundant_names)
+readsumsdf$genus = factor(most_abundant_genus)
+rownames(readsumsdf) = NULL
+plot_run2 = readsumsdf
+
+rm(pos_controls, top_quantity, rare_min,most_abundant_names, most_abundant, most_abundant_genus,ps_for_abundplot,
+   readsumsdf)
+
+```
+
+## Get only Mirpur samples.
+
+```{r}
+
+ps = subset_samples(ps, Site == 1) 
+ps = subset_samples(ps, !startsWith(rownames(sample_data(ps)), 'pos'))
+
+# remove if error in any reporting re Crypto infection
+keep1 = ifelse(sample_data(ps)$Crypto..Any. == '1' & as.numeric(sample_data(ps)$Clinical.type) < 3, 0, 1)
+ps = prune_samples(as.logical(keep1),ps)
+keep2 = ifelse(sample_data(ps)$Crypto..Any. == '999' & as.numeric(sample_data(ps)$Clinical.type) > 3, 0, 1)
+ps = prune_samples(as.logical(keep2),ps)
+keep3 = ifelse(sample_data(ps)$Crypto..Any. == '888' & as.numeric(sample_data(ps)$Clinical.type) > 3, 0, 1)
+ps = prune_samples(as.logical(keep3),ps)
+
+rm(keep1, keep2, keep3)
+
+```
+
+Convert sample data to factors and convert dates to month only for easier handling.
+
+```{r}
+
+# convert some sample data to factors
+tempsampledata = sample_data(ps)
+tempsampledata$Site = NULL
+tempsampledata$Clinical.type = as.factor(tempsampledata$Clinical.type)
+tempsampledata$Number.of.crypto.positive.events = as.factor(tempsampledata$Number.of.crypto.positive.events)
+# Clinical types
+# 12=diarrhea; 10=Clinic Visit; 1 =pre-clinic visit positive; 2=pre-diarrhea case positive
+tempsampledata$symptomatic = tempsampledata$Clinical.type %in% c(2,12)
+tempsampledata$pre_detection = tempsampledata$Clinical.type %in% c(1,2)
+
+# fix dates
+tempsampledata$Date.of.collection = as.Date(as.character(tempsampledata$Date.of.collection),format = "%d-%B-%y")
+tempsampledata$year.of.collection = as.factor(as.numeric(format(tempsampledata$Date.of.collection,'%Y')))
+tempsampledata$month.of.collection = as.factor(as.numeric(format(tempsampledata$Date.of.collection,'%m')))
+tempsampledata$Date.of.birth = as.Date(as.character(tempsampledata$Date.of.birth),format = "%d-%B-%y")
+tempsampledata$year.of.birth = as.factor(as.numeric(format(tempsampledata$Date.of.birth,'%Y')))
+tempsampledata$month.of.birth = as.factor(as.numeric(format(tempsampledata$Date.of.birth,'%m')))
+
+# ONE PROBLEM => STILL A PROBLEM
+sum(tempsampledata$Age.in.days != tempsampledata$Date.of.collection-tempsampledata$Date.of.birth)
+
+# Add rainfall data
+rainfall = read.table("~/local_documents/work/crypto_microbiome/data_cannot_be_shared/Rainfall.csv",header=TRUE, quote="",sep='\t') %>% filter(Site == 1) %>% select(-Site)
+rainfall$month.of.collection = as.factor(rainfall$month)
+rainfall$year.of.collection = as.factor(paste('20',rainfall$year, sep = ''))
+rainfall$rainfall = rainfall$Rainfall..mm.
+rainfall$Rainfall..mm. = NULL; rainfall$month = NULL; rainfall$year = NULL
+tempsampledata = merge(tempsampledata,rainfall,by=c("month.of.collection","year.of.collection"), all.x = T)
+
+# convert all "Any assays to factors"
+any_colnames <- names(tempsampledata)[grep("Any",names(tempsampledata))]
+tempsampledata[,any_colnames] <- lapply(tempsampledata[,any_colnames], factor)
+any_colnames <- names(tempsampledata)[grep("any",names(tempsampledata))]
+tempsampledata[,any_colnames] <- lapply(tempsampledata[,any_colnames], factor)
+
+# Correct for sample name-dropping that occurs when merging
+tempsampledata = sample_data(tempsampledata)
+sample_names(tempsampledata) = tempsampledata$sample.id
+
+# save
+sample_data(ps) = tempsampledata
+rm(rainfall,any_colnames, tempsampledata)
+
+# remove children who were lost to follow up
+ps = subset_samples(ps, !(Child.ID %in% left_study_ids))
+
+```
+
+## Adding genotype, pan-crypto Ct data, and species-specific Ct data
+
+These data were obtained after the initial processing of the sequence data, so we will add them to the metadata now.
+
+```{r}
+
+tempsampledata = as(sample_data(ps),"data.frame")
+
+# Add genotype information for all samples
+tempsampledata = merge(tempsampledata %>% tibble::rownames_to_column('use_as_rows'), 
+                       everything_df %>% select(-DOB,-study,-birth_order,-WAZ_2yr,-HAZ_2yr,-WHZ_2yr), 
+                       by.x = "Child.ID", by.y = "CHILDID", all.x = T)
+tempsampledata$drain = as.factor(tempsampledata$drain)
+tempsampledata$food_deficit = as.factor(tempsampledata$food_deficit)
+tempsampledata$toilet = as.factor(tempsampledata$toilet)
+tempsampledata$drinking_water_source = as.factor(tempsampledata$drinking_water_source)
+
+# Add crypto Cts
+tempsampledata$Child.ID = as.character(tempsampledata$Child.ID)
+tempsampledata = merge(tempsampledata, crypto_cts %>% select(-type), by.x = c("Child.ID","Date.of.collection"), by.y = c("CHILDID","date_of_collection"), all.x = T)
+tempsampledata[tempsampledata$pre_detection == T,"CRYCTRT"] = 45 # if predetection, Crypto DNA was not assessed or detected
+
+# get other Ct values (targeted qPCRs)
+all_ct = read.table("~/local_documents/work/crypto_microbiome/data_cannot_be_shared/Cq_values_all.txt",header=TRUE, sep='\t',comment.char = "",stringsAsFactors = F, na.strings = c("#N/A"))
+all_ct[is.na(all_ct)] = 45 # replace #NA and real NAs with 0
+all_ct[all_ct == 0] = 45 # replace #NA and real NAs with 0
+tempsampledata = tempsampledata %>% mutate(sample_id_mod = substr(sample.id,1,nchar(sample.id)-5))
+tempsampledata = merge(tempsampledata, all_ct, by.x = "sample_id_mod", by.y = "sample.id", all.x = T)
+rownames(tempsampledata) = tempsampledata$use_as_rows; tempsampledata$use_as_rows = NULL
+sample_data(ps) = tempsampledata
+
+df = all_ct %>% mutate(double_pos = ifelse(LIB13.C..hominis<45 & C..mel<45,1,0)) %>%
+  melt(id.vars = c("Pan_crypto",'sample.id','double_pos')) %>%
+  mutate(infected = ifelse(double_pos,'double positive',ifelse(Pan_crypto<45,'single',ifelse(value<45,'single','not')))) %>%
+  dcast(...~variable, value = 'value') %>%
+  mutate(infected_use = ifelse(LIB13.C..hominis<45 & C..mel<45,'double positive',
+                               ifelse(LIB13.C..hominis<45, 'C. hominis',
+                                      ifelse(C..mel<45, 'C. meleagridis','not')))) %>%
+  subset(infected != "not") %>% 
+  melt(id.vars = c("Pan_crypto",'sample.id','double_pos','infected','infected_use')) 
+
+df = rbind(rbind(df[df$infected == 'single' & df$variable == 'LIB13.C..hominis' & df$infected_use == 'C. hominis' & df$value > 0,],
+           df[df$infected == 'single' & df$variable == 'C..mel' & df$infected_use == 'C. meleagridis' & df$value > 0,]),
+           df[df$infected == 'double positive' ,])
+
+ct_df = df
+
+rm(df,tempsampledata,all_ct)
+
+```
+
+### Redo figure with Cts
+```{r}
+
+crypto_symptoms = merge(crypto_cts, DOB_df %>% select(-DOB), by = "CHILDID", all = T) %>% #all x only
+  select(-date_of_collection) %>%
+  mutate(type_use = ifelse(type == 'subclinical', 1, ifelse(type == 'diarrheal', 2, 0))) %>% select(-type) %>%
+  mutate(type = ifelse(is.na(type_use), 0, type_use),
+         site = ifelse(CHILDID %in% burden_mirpur$SID, 'Mirpur','Mirzapur')) %>% select(-type_use) %>%
+  group_by(CHILDID, type, site) %>% 
+  summarize(min_ct = ifelse(sum(is.na(CRYCTRT)) == length(CRYCTRT),45,
+                            min(CRYCTRT,na.rm = T))) %>% ungroup() %>% 
+  group_by(CHILDID, site) %>% summarize(val = mean(type), min_ct_overall = min(min_ct,na.rm = T)) %>% 
+  mutate(TYPE = ifelse(val == 0, 'never infected',
+                       ifelse(val == 2, 'diarrheal', 
+                              ifelse(val == 1, 'subclinical',
+                                     'both')))) %>% select(-val)
+
+temp_df = merge(total_diarrhea, crypto_symptoms, by = "CHILDID", all = T)
+
+# get kids that had no diarrhea
+no_diarr = temp_df[is.na(temp_df$EPINUM),] %>% mutate(n_diar = 0) %>% select(n_diar, TYPE, CHILDID, min_ct_overall)
+
+# summarize for kids who had diarrhea
+yes_diarr = temp_df %>% filter(!is.na(EPINUM)) %>% group_by(CHILDID) %>% mutate(n_diar = n()) %>% select(n_diar, TYPE, CHILDID, min_ct_overall) %>% dplyr::slice(1) %>% ungroup()
+
+# join 
+df_plot = rbind(no_diarr, yes_diarr) 
+df_plot$TYPE <- factor(df_plot$TYPE, levels = c("never infected","subclinical","diarrheal","both" ))
+levels(df_plot$TYPE)[levels(df_plot$TYPE) == 'never infected'] = 'no infection\ndetected'
+ct_updated_df = df_plot
+
+rm(no_diarr, yes_diarr,temp_df,df_plot)
+
+```
+
+To correct for differences in sequencing depth across samples, we will subsample to a uniform depth of 10000 reads for each sample.
+
+```{r message=FALSE}
+
+# Rarify reads in all samples
+rare_min = 10000
+# remove samples with fewer counts than the minimum
+ps_rare = prune_samples(sample_sums(ps) >=rare_min,ps) #8 removed
+# remove samples with NA age
+ps_rare = prune_samples(!is.na(sample_data(ps_rare)[,"Age.in.days"])[,1],ps_rare) # none removed
+ps_rare = rarefy_even_depth(ps_rare,sample.size=rare_min,rngseed=SEED_INT) # OTUs no longer in the dataset will be removed
+num_samples = length(sample_sums(ps_rare))
+
+```
+
+Add diversity to metadata.
+
+```{r}
+
+# adding Inverse Simplson to metadata 
+sample_data(ps_rare)$InvSimp = as.numeric(unlist(estimate_richness(ps_rare,measures="InvSimpson")))
+
+# adding Numebr of ASVs to metadata
+richness = estimate_richness(ps_rare,measures="Observed")
+colnames(richness) = c("NumASVs")
+
+row.names(richness) = gsub("X","",row.names(richness)) # for some reason, estimate richness adds an "X" at the beginneing of row names.
+asdf = as(sample_data(ps_rare),"data.frame")
+asdf = merge(asdf,richness,by="row.names")
+row.names(asdf) = asdf$Row.names
+asdf = asdf[,!colnames(asdf) %in% c("Row.names")]
+asdf$NumASVs = as.numeric(unlist(asdf$NumASVs))
+sample_data(ps_rare) = asdf
+
+rm(asdf, richness,num_samples)
+
+```
+
+## computation of change in each ASV between pre- and post- detection events
+
+```{r}
+
+# select only the pre/post detection samples, which will exclude any clinical type other than 1,2,10, or 12.
+# also exclude repeat infections (only get first)
+ps_rare_diff = subset_samples(ps_rare,sample_data(ps_rare)$Clinical.type %in% c(1,2,10,12))
+tempsampledata = as(sample_data(ps_rare_diff),"data.frame")
+new_data = tempsampledata
+new_data$Clinical.type = as.numeric(as.character(new_data$Clinical.type))
+    
+# Add the sample ID for the previous surveilance sample and the age of the child at that time
+new_data$previous_surv = NA; new_data$age_at_surv = NA
+new_data$pre_InvSimp = NA; new_data$pre_NumASVs = NA
+for (i in 1:nrow(new_data)) {
+  # get TOD info
+  kid = new_data$Child.ID[i]
+  age_during_this_sample = new_data$Age.in.days[i] # in days
+  clinical_type_of_this = new_data$Clinical.type[i]
+
+  # make sure we're looking at the right group of pre_detection samples
+  if (clinical_type_of_this == 10) { desired_clinical_type = 1
+  } else if (clinical_type_of_this == 12) { desired_clinical_type = 2
+  } else { desired_clinical_type = NA }
+  one_kids_other_samples = new_data[new_data$Child.ID == kid,] %>% filter(Clinical.type == desired_clinical_type)
+
+  # make sure pre_detection sample is within 30 days
+  # if one option
+  if ( nrow(one_kids_other_samples) == 1 ) {
+    if (one_kids_other_samples$Age.in.days < age_during_this_sample & one_kids_other_samples$Age.in.days > age_during_this_sample - 42) {
+      new_data$previous_surv[i] = one_kids_other_samples$sample.id
+      new_data$age_at_surv[i] = one_kids_other_samples$Age.in.days
+      new_data$pre_InvSimp[i] = one_kids_other_samples$InvSimp
+      new_data$pre_NumASVs[i] = one_kids_other_samples$NumASVs }
+  # if one option
+    } else if ( nrow(one_kids_other_samples) > 1) {
+      for (x in 1:nrow(one_kids_other_samples) ) {
+        if (one_kids_other_samples$Age.in.days[x] < age_during_this_sample & one_kids_other_samples$Age.in.days[x] > age_during_this_sample - 42) {
+          new_data$previous_surv[i] = one_kids_other_samples$sample.id[x]
+          new_data$age_at_surv[i] = one_kids_other_samples$Age.in.days[x]
+          new_data$pre_InvSimp[i] = one_kids_other_samples$InvSimp[x]
+          new_data$pre_NumASVs[i] = one_kids_other_samples$NumASVs[x] }
+        }
+      } else { next }
+}
+rm(age_during_this_sample,one_kids_other_samples,desired_clinical_type,kid,i,x)
+
+new_data$Clinical.type = as.factor(as.character(new_data$Clinical.type))
+use_this = sample_data(new_data)
+sample_names(use_this) = use_this$sample.id
+sample_data(ps_rare_diff) = use_this
+
+#omit if predetection sample doesn't have a paired detection sample
+ps_rare_diff = (subset_samples(ps_rare_diff, (sample_data(ps_rare_diff)$sample.id %in% sample_data(ps_rare_diff)$previous_surv) | sample_data(ps_rare_diff)$pre_detection == F))
+#omit if detection sample doesn't have a piared predetection sample
+ps_rare_diff = (subset_samples(ps_rare_diff, !(is.na(sample_data(ps_rare_diff)$previous_surv)) | sample_data(ps_rare_diff)$pre_detection == T))
+
+rm(new_data,tempsampledata,use_this, clinical_type_of_this)
+
+for_stats = ps_rare_diff
+
+```
+
+# match samples and get CHANGE in microbiome
+``` {r}
+
+# get dataset where samples are matched
+ps_rare_for_beta = ps_rare_diff
+
+# calculate difference
+temp_otu = otu_table(ps_rare_for_beta)
+keep_these = c()
+for (i in 1:nrow(sample_data(ps_rare_for_beta))) {
+  time_of_detection_sample_id = rownames(sample_data(ps_rare_for_beta))[i]
+  predetection_sample_id = sample_data(ps_rare_for_beta)$previous_surv[i]
+  # make true if NA to remove from dataset
+  if (is.na(time_of_detection_sample_id)) {sample_data(ps_rare_for_beta)$pre_detection[i] = T}
+  if (is.na(predetection_sample_id)) {sample_data(ps_rare_for_beta)$pre_detection[i] = T}
+  
+  if (!sample_data(ps_rare_for_beta)$pre_detection[i]) {
+    keep_these[i] = T
+    temp_otu[rownames(temp_otu) == time_of_detection_sample_id,] = 
+      temp_otu[rownames(temp_otu) == time_of_detection_sample_id,] - temp_otu[rownames(temp_otu) == predetection_sample_id,]
+  }
+  else { # we are looking at a predetection sample and aren't interested in it
+    keep_these[i] = F }
+}
+# resave
+otu_table(ps_rare_for_beta) = temp_otu
+
+# remove predetection samples
+ps_rare_for_beta = prune_samples(!sample_data(ps_rare_for_beta)$pre_detection,ps_rare_for_beta)
+
+# get samples with fewer than 5 non-zero OTUs
+nonzero_count = apply(otu_table(ps_rare_for_beta), 1, function(c)sum(c!= 0))
+ps_rare_for_beta = prune_samples(nonzero_count > 5, ps_rare_for_beta)
+change_in_microbiota_ps = ps_rare_for_beta
+dis_df = dist(otu_table(ps_rare_for_beta))
+pca_df = prcomp(dis_df)
+axis_location = cbind(pca_df$rotation, sample_data(ps_rare_for_beta))
+
+axis_location$symptomatic = as.factor(axis_location$symptomatic)
+levels(axis_location$symptomatic)[levels(axis_location$symptomatic)=="FALSE"] = "subclinical"
+levels(axis_location$symptomatic)[levels(axis_location$symptomatic)=="TRUE"] = "diarrheal"
+
+```
+
+# Save data for other scripts
+
+```{r}
+
+save(list = c("df_summary","read_count_stats_df", "read_counts_df","pos_controls1","pos_controls2","plot_run1", "plot_run2", "ct_df","ct_updated_df","ps_rare_diff","ps","axis_location","for_stats","ps_rare","change_in_microbiota_ps","burden_sex"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_plot_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+
+save(list = c("for_stats","ps","ps_rare","ps_rare_diff","change_in_microbiota_ps"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_" , format(Sys.time(), "%Y_%m_%d")),".RData")) 
+
+```
+
+# Make figures
+
+```{r}
+
+#rmarkdown::render("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/code/R_markdown/P1_analysis_prep_figures.Rmd")
+
+```
+

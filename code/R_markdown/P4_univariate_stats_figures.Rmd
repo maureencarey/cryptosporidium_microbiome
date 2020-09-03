@@ -1,0 +1,75 @@
+---
+title: "Microbiome analysis - univariate statistics"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(ggplot2); library(ggrepel); library(dplyr)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000); theme_set(theme_bw())
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P4output_plot_2020_09_02.RData")
+
+```
+
+# Plot predetection volcano plot
+
+```{r}
+
+ggplot(predetection_tax2 %>% mutate(timepoint = 'pre-detection')) + 
+  geom_point(aes(x = log2FoldChange, y = sig, color = as.factor(col2), size = as.factor(size2) ), alpha = .2)+
+  xlab("Effect size: log2(fold change)") + ylab("-log10(adjusted p-value)")+
+  scale_color_manual(values = c('black',"red","purple"),  guide = F) +
+  scale_size_manual(values = c(1,3),  guide = F) + facet_wrap(~timepoint)
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4B_univar_PD.png",
+       width = 4,height = 4,units = "in",dpi = 300)
+
+ggplot(predetection_tax2) + 
+  geom_point(aes(x = log2FoldChange, y = sig, color = as.factor(col2), size = as.factor(size2) ), alpha = .2)+
+  xlab("Effect size: log2(fold change)") + ylab("-log10(adjusted p-value)")+
+  scale_color_manual(values = c('black',"red","purple"),  guide = F) +
+  scale_size_manual(values = c(1,3),  guide = F)  + 
+  geom_label_repel(data = predetection_tax2 %>% filter(!(is.na(top10_PD))), #filter(lab == 1), 
+                   aes(x = log2FoldChange, y = sig, color = as.factor(col2), label = var)) + xlim(-5,4)
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/FOR_REF_Fig4B_univar_PD.png",
+       width = 5,height = 5,units = "in",dpi = 300)
+
+```
+
+# Plot time-of-detection volcano plot
+
+```{r}
+
+ggplot(tod_tax2 %>% mutate(timepoint = 'time-of-detection')) + 
+  geom_point(aes(x = log2FoldChange, y = sig, color = as.factor(col2), size = as.factor(size2) ), alpha = .2)+
+  xlab("Effect size: log2(fold change)") + ylab("-log10(adjusted p-value)")+
+  scale_color_manual(values = c('black',"blue","purple"),  guide = F) +
+  scale_size_manual(values = c(1,3),  guide = F)+ facet_wrap(~timepoint)
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4B_univar_TOD.png",
+       width = 4,height = 4,units = "in",dpi = 300)
+
+ggplot(tod_tax2) + 
+  geom_point(aes(x = log2FoldChange, y = sig, color = as.factor(col2), size = as.factor(size2) ), alpha = .2)+
+  xlab("Effect size: log2(fold change)") + ylab("-log10(adjusted p-value)")+
+  scale_color_manual(values = c('black',"blue","purple"),  guide = F) +
+  scale_size_manual(values = c(1,3),  guide = F)  + 
+  geom_label_repel(data = tod_tax2 %>% filter(!(is.na(top10_TOD))), #filter(lab == 1), 
+                   aes(x = log2FoldChange, y = sig, color = as.factor(col2), label = var)) + xlim(-5,4)
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/FOR_REF_Fig4B_univar_TOD.png",
+       width = 5,height = 5,units = "in",dpi = 300)
+
+```

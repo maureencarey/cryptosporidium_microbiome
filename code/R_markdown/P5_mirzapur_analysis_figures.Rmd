@@ -1,0 +1,56 @@
+---
+title: "Microbiome analysis - Mirzapur follow-up"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(ggplot2); library(phyloseq)
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P5output_plot_2020_09_02.RData")
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000); theme_set(theme_bw())
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+```
+
+# Plot - Fig 4F
+
+```{r}
+
+ggplot(df, aes(x = Site, y = value, color = Site)) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_point(alpha = 0.5, position = position_jitter(width = 0.3, height = 0, seed = SEED_INT)) + 
+  facet_wrap(~time) +
+  scale_y_sqrt() +
+  scale_color_manual(values = c('black','darkgray'), guide = F) +
+  geom_hline(yintercept = 0.2, linetype = 'dotted', alpha = .75) +
+  ylab('relative abundance')
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4F_mega_box_Mirzapur.png",
+       width = 3.2,height = 3.5,units = "in",dpi = 300)
+
+```
+
+## Table 1-like data for methods
+
+```{r}
+
+length(unique(sample_data(ps_mirzapur_rare)$Child.ID))
+length((sample_data(ps_mirzapur_rare)$Child.ID))
+table(sample_data(ps_mirzapur_rare)$Clinical.type)
+min(sample_data(ps_mirzapur_rare)$Date.of.collection)
+max(sample_data(ps_mirzapur_rare)$Date.of.collection)
+
+```

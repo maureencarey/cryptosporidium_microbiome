@@ -1,0 +1,643 @@
+---
+title: "Microbiome analysis - machine learning"
+author: "Maureen A. Carey"
+date: "09/01/2020"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(phyloseq); library(reshape2); library(tibble)
+library(randomForest); library(rmarkdown); library(dplyr); library(tidyr); library(pROC)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
+total_diarrhea = total_diarrhea  %>% filter(CHILDID %in% burden_mirpur$SID) # remaining kids never were sick
+all_cause_diar = total_diarrhea %>% group_by(CHILDID,study) %>% summarize(episodes = n()) %>% ungroup()
+rm(list= ls()[! (ls() %in% c('all_cause_diar','SEED_INT','colors'))])
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_2020_09_02.RData")
+
+# make useful functions
+randomForest_res = function(x,y,N) { 
+  # x = variables used to predict class, y = classs labels, N = number imp variables you want
+  # THIS ONLY WORKS IF YOU"RE CLASSIFYING 10 v. 12 (subclinical v. diarrheal)
+  rf_res_object = randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+
+  extracted_importance = importance(rf_res_object,type=2) # type 2 = node impurity, more useful for auc
+  extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
+  topN = tail(extracted_importance,N)
+
+  predictions = as.data.frame(predict(rf_res_object,type="prob"))
+  predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+  predictions$observed = y
+  
+  ROC_res = roc(ifelse(predictions$observed==10, 10, 12), as.numeric(predictions$`10`))
+  AUC_res = auc(ROC_res)
+  return(list(rf_res_object,ROC_res,AUC_res,topN))  
+}
+
+```
+
+# Can we predict whether a sample was sub-clinical or diarrheal from predetection microbiota?
+
+```{r}
+
+compare <- c(1,2) # predetection -> +/- symptoms
+ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+y <- as.factor(sample_data(ps_for_class)$Clinical.type)
+rf <- randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.00015,130))
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_PD_" , format(Sys.time(), "%Y_%m_%d")),".RData"))   
+x_for_PD = x
+y_for_PD = y
+
+extracted_importance = importance(rf,type=2) # type 2 = node impurity, more useful for auc
+extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
+top10_PD = tail(extracted_importance,10)
+
+predictions = as.data.frame(predict(rf,type="prob"))
+predictions$predict <- names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed <- y
+
+roc_PD <- roc(ifelse(predictions$observed==1, 1, 2), as.numeric(predictions$`1`))
+AUC_PD = auc(roc_PD)
+AUC_PD
+
+rm(x,y,rf,predictions,extracted_importance,ps_for_class)
+
+```
+
+# Can we predict whether a sample was sub-clinical or diarrheal from TOD microbiota?
+
+```{r}
+
+compare <- c(10,12) # TOD +/- symptoms
+ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+y <- as.factor(sample_data(ps_for_class)$Clinical.type)
+x_for_TOD = x
+y_for_TOD = y
+
+rf = randomForest_res(x_for_TOD,y_for_TOD,10)
+top10_TOD = rf[[4]]
+roc_TOD = rf[[2]]
+AUC_TOD = rf[[3]]
+AUC_TOD
+
+rf = rf[[1]]
+# use this on rivanna for faster computing
+save(list = c("rf","x","y"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_TOD_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+rm(x,y,rf,ps_for_class)
+
+```
+
+# Save data for other scripts
+
+```{r}
+
+save(list = c("top10_TOD","top10_PD"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p1_" , format(Sys.time(), "%Y_%m_%d")),".RData")) 
+
+```
+
+## DATA NOT SHOWN: Can we predict whether a sample was a first or second infection from TOD microbiota?
+
+```{r}
+
+# time-of-detection
+compare <- c(10,12) # TOD +/- symptoms
+ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+y <- as.numeric(as.character(sample_data(ps_for_class)$Number.of.crypto.positive.events))
+y[y!=1] = 2 # merge third infections with second
+
+temp_df = as(sample_data(ps_for_class),"data.frame") %>% 
+  select(Number.of.crypto.positive.events, symptomatic) %>%
+  mutate(n_crypto = ifelse(Number.of.crypto.positive.events == 1, '1', '2+')) %>% select(-Number.of.crypto.positive.events) %>%
+  table() %>% as.data.frame() %>%
+  mutate(symptomatic_use = ifelse(symptomatic == T, 'diarrheal','subclinical')) %>%
+  select(-symptomatic) %>% dplyr::rename(symptomatic = symptomatic_use)
+chi_df = temp_df
+
+rf = randomForest(x,as.factor(y),importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.1,100))
+rf
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_TOD_1stv2nd_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+extracted_importance = importance(rf,type=2) # type 2 = node impurity, more useful for auc
+extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
+topN_first_infection = tail(extracted_importance,10)
+
+predictions = as.data.frame(predict(rf,type="prob"))
+predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed = y
+
+ROC_first_infection = roc(ifelse(predictions$observed==1, 1, 2), as.numeric(predictions$`1`))
+auc(ROC_first_infection) 
+
+rm(x,y,rf,ps_for_class)
+
+```
+
+## DATA NOT SHOWN: Can we predict whether a sample was a first or second infection from PD microbiota?
+
+```{r}
+
+# predetection
+compare <- c(1,2) # PD +/- symptoms
+ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+y <- as.numeric(as.character(sample_data(ps_for_class)$Number.of.crypto.positive.events))
+y[y!=1] = 2 # merge third infections with second
+rf = randomForest(x,as.factor(y),importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.1,100))
+rf
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_PD_1stv2nd_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+extracted_importance = importance(rf,type=2) # type 2 = node impurity, more useful for auc
+extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
+topN_first_infection_PD = tail(extracted_importance,10)
+
+predictions = as.data.frame(predict(rf,type="prob"))
+predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed = y
+
+ROC_first_infection = roc(ifelse(predictions$observed==1, 1, 2), as.numeric(predictions$`1`))
+auc(ROC_first_infection) 
+
+rm(x,y,rf,ps_for_class)
+
+```
+
+## DATA NOT SHOWN: Can we predict all cause diarrhea from TOD microbiota?
+
+```{r}
+
+compare <- c(10,12) # TOD +/- symptoms
+ps_for_class2 <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+all_cause_diar_temp = all_cause_diar %>% filter(CHILDID %in% sample_data(ps_for_class2)$Child.ID)
+all_cause_diar_temp = merge(all_cause_diar_temp, as(sample_data(ps_for_class2)[,1:2], "data.frame"), by.x = "CHILDID", by.y = "Child.ID", all.y = T) %>% select(-study,-CHILDID)
+sample_data(ps_for_class2)$episodes = all_cause_diar_temp$episodes[order(match(all_cause_diar_temp$sample_id_mod, sample_data(ps_for_class2)$sample_id_mod))]
+x <- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),"data.frame") %>% select(Age.in.days))
+y <- sample_data(ps_for_class2)$episodes
+## WHY IS THERE AN NA
+y[is.na(y)] = 0
+
+rf = randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+rf
+
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_all_diar_fromTOD_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+rm(x,y,rf,ps_for_class2)
+
+```
+
+## DATA NOT SHOWN: Can we predict all cause diarrhea from PD microbiota?
+
+```{r}
+
+compare <- c(1,2) # PD +/- symptoms
+ps_for_class2 <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+all_cause_diar_temp = all_cause_diar %>% filter(CHILDID %in% sample_data(ps_for_class2)$Child.ID)
+all_cause_diar_temp = merge(all_cause_diar_temp, as(sample_data(ps_for_class2)[,1:2], "data.frame"), by.x = "CHILDID", by.y = "Child.ID", all.y = T) %>% select(-study,-CHILDID)
+sample_data(ps_for_class2)$episodes = all_cause_diar_temp$episodes[order(match(all_cause_diar_temp$sample_id_mod, sample_data(ps_for_class2)$sample_id_mod))]
+x <- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),"data.frame") %>% select(Age.in.days))
+y <- sample_data(ps_for_class2)$episodes
+## WHY IS THERE AN NA
+y[is.na(y)] = 0
+
+rf = randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+rf
+
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_all_diar_fromPD_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+rm(x,y,rf,ps_for_class2)
+
+```
+
+## Can we predict whether a sample was sub-clinical or diarrheal from PD & TOD microbiota?
+# not a great analysis because trees don't scale well to compare AUC
+
+```{r}
+
+compare <- c(10,12) # TOD +/- symptoms
+ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+ps_for_class <- subset_samples(ps_for_class, !is.na(previous_surv))
+ps_for_surv <- subset_samples(ps_rare_diff, sample.id %in% sample_data(ps_for_class)$previous_surv)
+taxa_names(ps_for_surv) <- paste0("pre_", taxa_names(ps_for_surv))
+time_of_detect_microbes = otu_table(ps_for_class)
+surv_microbes = otu_table(ps_for_surv)
+# reorder the surveilance to match the TOD
+proper_order = sample_data(ps_for_class)$previous_surv
+surv_microbes = surv_microbes[proper_order]
+
+x <- cbind(cbind(time_of_detect_microbes,surv_microbes), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+y = as.factor(sample_data(subset_samples(ps_for_class, Clinical.type %in% compare))$Clinical.type)
+rf = randomForest_res(x,y,15)
+rf[[1]]
+
+top_15_for_all_microbiome = rf[[4]]
+roc_allM = rf[[2]]
+AUC_allM = rf[[3]]
+AUC_allM
+rm(rf, x,y,proper_order,ps_for_surv)
+
+```
+
+## Can we predict whether a sample was sub-clinical or diarrheal from PD & TOD microbiota AND metadata?
+# not a good analysis because trees don't scale well to compare AUC
+
+```{r}
+ 
+meta_for_rf = as(sample_data(ps_for_class)[,c( "rainfall","drain","food_deficit",
+                                                #"toilet", # too many NAs
+                                                "drinking_water_source","income_mo",
+                                                "water_treat","siblings_under_5",
+                                                #"CREM_rs2148483_A","PRKCA_rs58296998_T", #too many NAs
+                                                "month.of.birth","year.of.birth",
+                                                "month.of.collection",
+                                                "year.of.collection", "Any..Giardia",
+                                                "Any..E.histolytica",
+                                                "WAZ","WHZ","HAZ",#"MUACZ",
+                                               "BAZ",
+                                                "Number.of.crypto.positive.events",
+                                                "Age.in.days")],"data.frame")
+meta_for_rf$water_treat = as.factor(meta_for_rf$water_treat)
+
+x = cbind(time_of_detect_microbes,meta_for_rf,surv_microbes)
+y = as.factor(sample_data(subset_samples(ps_for_class, Clinical.type %in% compare))$Clinical.type)
+rf = randomForest_res(x,y,20)
+rf[[1]]
+
+top15_without_abx = rf[[4]]
+roc_allM_M = rf[[2]]
+AUC_allM_M = rf[[3]]
+AUC_allM_M
+
+rm(rf,x,y,ps_for_class)
+
+```
+
+# Prep Abx data for integration into model
+
+```{r}
+
+for_metadata = subset_samples(ps_rare_diff, Clinical.type %in% c(10,12))
+for_metadata = subset_samples(for_metadata, !is.na(previous_surv))
+temp_df = as(sample_data(for_metadata)[,c("sample.id")],"data.frame") 
+rownames(temp_df) = temp_df$sample.id
+temp_df2 = as(sample_data(for_metadata)[,c("Child.ID","Date.of.collection","sample.id")],"data.frame")
+# kids with zero ABx don't have their Run# in these dataframes - cut those kids and then add after
+keep_for_rf_all_abx2 = merge(keep_for_rf_all_abx %>% filter(!is.na(sample.id)), temp_df, 
+                            by = 'sample.id', all.y = T) %>% select(sample.id,n_abx_doses)
+keep_for_rf_all_abx2$n_abx_doses[is.na(keep_for_rf_all_abx2$n_abx_doses)] = 0
+rownames(keep_for_rf_all_abx2) = keep_for_rf_all_abx2$sample.id; keep_for_rf_all_abx2$sample.id = NULL
+
+keep_for_rf_each_abx2 = merge(keep_for_rf_each_abx,temp_df2, 
+                            by = c("Child.ID","Date.of.collection"), all.y = T) %>%
+  select(-Child.ID,-Date.of.collection,-symptomatic,-pre_detection)
+keep_for_rf_each_abx2 = keep_for_rf_each_abx2[!is.na(keep_for_rf_each_abx2$sample.id),]
+rownames(keep_for_rf_each_abx2) = keep_for_rf_each_abx2$sample.id; keep_for_rf_each_abx2$sample.id = NULL
+
+abx_history = cbind(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
+rm(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
+
+#get metadata for only samples that have abx history
+limited_metadata = as(sample_data(for_metadata)[,c("rainfall","drain","food_deficit",
+                                                "drinking_water_source","income_mo",
+                                                "water_treat","siblings_under_5",
+                                                "month.of.birth","year.of.birth",
+                                                "month.of.collection",
+                                                "year.of.collection", "Any..Giardia",
+                                                "Any..E.histolytica",
+                                                "WAZ","WHZ","HAZ","BAZ",
+                                                "Number.of.crypto.positive.events",
+                                                "Age.in.days")],"data.frame")
+limited_metadata$water_treat = as.factor(limited_metadata$water_treat)
+
+```
+
+# Can we predict whether a sample was sub-clinical or diarrheal from TOD microbiome AND ABx data?
+
+```{r}
+
+for_metadata = subset_samples(ps_rare_diff, Clinical.type %in% c(10,12))
+for_metadata = subset_samples(for_metadata, !is.na(previous_surv))
+temp_df = as(sample_data(for_metadata)[,c("sample.id")],"data.frame") 
+rownames(temp_df) = temp_df$sample.id
+temp_df2 = as(sample_data(for_metadata)[,c("Child.ID","Date.of.collection","sample.id")],"data.frame")
+# kids with zero ABx don't have their Run# in these dataframes - cut those kids and then add after
+keep_for_rf_all_abx2 = merge(keep_for_rf_all_abx %>% filter(!is.na(sample.id)), temp_df, 
+                            by = 'sample.id', all.y = T) %>% select(sample.id,n_abx_doses)
+keep_for_rf_all_abx2$n_abx_doses[is.na(keep_for_rf_all_abx2$n_abx_doses)] = 0
+rownames(keep_for_rf_all_abx2) = keep_for_rf_all_abx2$sample.id; keep_for_rf_all_abx2$sample.id = NULL
+
+keep_for_rf_each_abx2 = merge(keep_for_rf_each_abx,temp_df2, 
+                            by = c("Child.ID","Date.of.collection"), all.y = T) %>%
+  select(-Child.ID,-Date.of.collection,-symptomatic,-pre_detection)
+keep_for_rf_each_abx2 = keep_for_rf_each_abx2[!is.na(keep_for_rf_each_abx2$sample.id),]
+rownames(keep_for_rf_each_abx2) = keep_for_rf_each_abx2$sample.id; keep_for_rf_each_abx2$sample.id = NULL
+
+abx_history = cbind(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
+rm(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
+
+x_withabx = cbind(cbind(abx_history, otu_table(for_metadata)), as(sample_data(for_metadata),"data.frame") %>% select(Age.in.days))
+y = as.factor(sample_data(for_metadata)$Clinical.type)
+
+rf = randomForest_res(x_withabx,y,25)
+rf[[1]]
+
+top20_TOD_with_abx = rf[[4]]
+roc_TOD_abx = rf[[2]]
+AUC_TOD_abx = rf[[3]]
+AUC_TOD_abx
+
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_TOD_abx_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+rm(rf,x_withabx,y)
+
+```
+
+## DATA NOT SHOWN: Can we predict whether a sample was sub-clinical or diarrheal from metadata AND ABx data?
+
+```{r}
+
+x = cbind(limited_metadata,abx_history)
+y = as.factor(sample_data(for_metadata)$Clinical.type)
+
+rf = randomForest_res(x,y,15)
+rf[[1]]
+
+top15_metadata_with_abx = rf[[4]]
+roc_meta_abx = rf[[2]]
+AUC_meta_abx = rf[[3]]
+AUC_meta_abx
+
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_meta_abx_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+rf = randomForest_res(limited_metadata,y,15)
+rf[[1]]
+top15_metadata_without_abx = rf[[4]]
+roc_meta_no_abx = rf[[2]]
+AUC_meta_no_abx = rf[[3]]
+AUC_meta_no_abx
+
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_meta_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+rm(rf,x,y,limited_metadata)
+
+roc_list_mirpur = list(roc_meta_abx,roc_meta_no_abx)
+names(roc_list_mirpur) = c("metadata","metadata &\nantibiotics")
+
+```
+
+
+# Prep for Figure 4D: Plot top 10 most important variables wth both microbiota classifiers
+
+```{r}
+
+## gini
+plt_df1 = as.data.frame(top10_TOD) %>% rownames_to_column('variable') %>% dplyr::rename(value = top10_TOD) 
+plt_df2 = as.data.frame(top10_PD) %>%rownames_to_column('variable') %>% dplyr::rename(value = top10_PD)
+plt_df = rbind(plt_df1 %>% mutate(model = 'time-of-detection'),plt_df2 %>% mutate(model = 'pre-detection'))
+plt_df$model = as.factor(plt_df$model)
+save_df1 = plt_df1
+save_df2 = plt_df2
+save(list = c("save_df1","save_df2"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p2_" , format(Sys.time(), "%Y_%m_%d")),".RData")) 
+
+tax = tax_table(ps_rare_diff)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tidyr::spread(tax, key = model, value = value)  %>% # this line is new here
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+
+
+plot_tax = tax2 %>% select(pre.detection, time.of.detection, var) %>% melt(id.vars = "var", na.rm = T)
+plot_tax$var = as.factor(plot_tax$var)
+plot_tax$var = reorder(plot_tax$var, -plot_tax$value)
+plot_tax$var <- relevel(plot_tax$var, "ASV19 (Megasphaera)")
+plot_tax_4D = plot_tax
+
+```
+
+## Save data for interaction plots - interested but DATA NOT SHOWN (Also, needs to be performed on a computer with more mem than my laptop)
+
+```{r}
+
+# save data for interaction plots
+ASV = tax2[!(is.na(tax2$Genus))& tax2$Genus == "Megasphaera",1]
+ASV_10 = tax2[,1]
+
+tax = tax_table(ps_rare_diff) %>% as.data.frame()
+tax$Genus = as.character(tax$Genus)
+save_tax = tax %>% 
+  rownames_to_column("Row.names") %>%
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')')))) 
+save(list = c("ASV", "save_tax"), file = paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/megasphaera_ASV_"
+              , format(Sys.time(), "%Y_%m_%d")
+              , ".RData"))
+save(list = c("ASV_10", "save_tax"), file = paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/top_ASVs_"
+              , format(Sys.time(), "%Y_%m_%d")
+              , ".RData"))
+
+```
+
+## DATA NOT SHOWN: Plot important variables (raw values)
+
+```{r}
+
+#extract ASV that are in Tax2 from predetection otu_table
+otu_PD = as.data.frame(x_for_PD)[,plt_df2$variable] %>% rownames_to_column('sample') %>% mutate(symptomatic = y_for_PD)
+#extract ASV that are in Tax2 from TOD otu_table
+otu_TOD = as.data.frame(x_for_TOD)[,plt_df1$variable] %>% rownames_to_column('sample') %>%mutate(symptomatic = y_for_TOD)
+ids = as(sample_data(ps_rare_diff),"data.frame") %>% select(Child.ID) %>% rownames_to_column('sample')
+otu_PD = merge(otu_PD, ids, all.x = T, all.y = F, by = "sample")
+otu_TOD = merge(otu_TOD, ids, all.x = T, all.y = F, by = "sample")
+
+plt_df = melt(otu_TOD) %>%
+  group_by(variable) %>%
+  mutate(value_use = value/max(value)) %>%
+  ungroup() %>%
+  mutate(symptomatic_use = ifelse(symptomatic == '10','subclinical','diarrheal')) %>%
+  tidyr::separate(sample, c("sample", "remove_extra")) %>%
+  select(-remove_extra) 
+
+tax = tax_table(ps_rare_diff)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+#ASV10 (Collinsella) for PD
+#ASV5 (Parabacteroides) for TOD
+TOD_twoASVs = tax2 %>% filter(var == 'ASV10 (Megasphaera)' | var == 'ASV5 (Parabacteroides)')
+
+tax2_TOD = tax2
+rm(tax, tax2, plt_df)
+
+plt_df = melt(otu_PD) %>%
+  group_by(variable) %>%
+  mutate(value_use = value/max(value)) %>%
+  ungroup() %>%
+  mutate(symptomatic_use = ifelse(symptomatic == '1','subclinical','diarrheal')) %>%
+  tidyr::separate(sample, c("sample", "remove_extra")) %>%
+  select(-remove_extra) 
+
+tax = tax_table(ps_rare_diff)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+#ASV10 (Collinsella) for PD
+#ASV5 (Parabacteroides) for TOD
+PD_twoASVs = tax2 %>% filter(var == 'ASV10 (Megasphaera)' | var == 'ASV3 (Collinsella)')
+tax2_PD = tax2
+
+rm(tax, tax2, plt_df)
+
+```
+
+# Prep for Figure 4E - important variables
+
+```{r}
+
+twoASVs = rbind(TOD_twoASVs %>% filter(var == "ASV10 (Megasphaera)") %>% mutate(time = 'time-of-detection'), 
+                PD_twoASVs %>% filter(var == "ASV10 (Megasphaera)") %>% mutate(time = 'pre-detection'))
+
+# trying to plot TOD on y axis and PD on x axis
+temp1 = twoASVs %>% select(value_use,symptomatic_use, Genus,time, Child.ID) %>% filter(time == 'time-of-detection') %>% select(-time) %>% dplyr::rename(`time-of-detection` = value_use)
+temp2 = twoASVs %>% select(value_use,symptomatic_use, Genus,time, Child.ID) %>% filter(time == 'pre-detection') %>% select(-time) %>% dplyr::rename(`pre-detection` = value_use)
+two_WIDE = merge(temp1, temp2, all = T)
+colnames(two_WIDE)[colnames(two_WIDE) == 'symptomatic_use'] = 'symptomatic?'
+
+twoASVs_TOD_wide = tidyr::spread(TOD_twoASVs %>% select(value_use,symptomatic_use,sample, Genus),
+                             key = Genus, value = value_use) %>% 
+  mutate(`symptomatic?` = as.factor(symptomatic_use)) 
+
+twoASVs_PD_wide = tidyr::spread(PD_twoASVs %>% select(value_use,symptomatic_use,sample, Genus),
+                             key = Genus, value = value_use) %>% 
+  mutate(`symptomatic?` = as.factor(symptomatic_use))
+
+count_df_PD_mirpur = twoASVs_PD_wide
+count_df_TOD_mirpur = twoASVs_TOD_wide
+save(list = c("count_df_PD_mirpur","count_df_TOD_mirpur"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p3_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+```
+
+## DATA NOT SHOWN: Imp var for first v later infection
+
+```{r}
+ 
+plt_df1 = as.data.frame(topN_first_infection) %>% rownames_to_column('variable') %>% dplyr::rename(value = topN_first_infection) 
+plt_df2 = as.data.frame(topN_first_infection_PD) %>%rownames_to_column('variable') %>% dplyr::rename(value = topN_first_infection_PD)
+plt_df = rbind(plt_df1 %>% mutate(model = 'time-of-detection'),plt_df2 %>% mutate(model = 'pre-detection'))
+plt_df$model = as.factor(plt_df$model)
+
+tax = tax_table(ps_rare_diff)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+
+tax2_infect = tax2
+rm(tax, tax2, plt_df)
+
+```
+
+# Prep Supplemental Figure 5 - ROC and Important variables, Adding in Abx to model
+
+```{r}
+
+plt_df1 = as.data.frame(top10_TOD) %>%rownames_to_column('variable') %>% dplyr::rename(value = top10_TOD) 
+plt_df2 = as.data.frame(top20_TOD_with_abx) %>%rownames_to_column('variable') %>% dplyr::rename(value = top20_TOD_with_abx) %>% top_n(10,value)
+plt_df = rbind(plt_df1 %>% mutate(model = 'without abx'),plt_df2 %>% mutate(model = 'with abx'))
+plt_df$model = as.factor(plt_df$model)
+
+tax = tax_table(ps_rare_diff)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tax %>% 
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+tax2_abx = tax2
+rm(tax,tax2,plt_df,plt_df1,plt_df2)
+
+```
+
+## DATA NOT SHOWN: Can we predict whether a sample was sub-clinical or diarrheal from microbiota based on the change in microbiome?
+
+```{r}
+
+compare <- c(10,12) # TOD +/- symptoms
+ps_for_class = change_in_microbiota_ps
+ps_for_class <- subset_samples(ps_for_class, Clinical.type %in% compare)
+ps_for_class_rel = ps_for_class#transform_sample_counts(ps_for_class, function(x) x/sum(x))
+
+x <- otu_table(ps_for_class_rel)
+y <- as.factor(sample_data(subset_samples(ps_for_class_rel, Clinical.type %in% compare))$Clinical.type)
+
+
+rf = randomForest_res(x,y,10)
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_change_" , format(Sys.time(), "%Y_%m_%d")),".RData"))     
+roc_change = rf
+
+rm(x,y,rf,ps_for_class_rel,ps_for_class,p)
+
+```
+
+# Save data for other scripts
+
+```{r}
+
+#"roc_list_mirpur","otu_TOD","","",
+# 
+# save(list = c("predetection_tax2","tod_tax2"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+
+save(list = c("chi_df","roc_TOD","roc_PD","plot_tax_4D","otu_PD","tax2_TOD","tax2_PD","twoASVs","two_WIDE","tax2_infect","roc_TOD","roc_TOD_abx","tax2_abx","roc_change","roc_allM_M","roc_allM","AUC_TOD","AUC_PD","AUC_allM","AUC_allM_M","AUC_TOD_abx"), file = paste0(paste0("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+
+```
+
+# Make figures
+```{r}
+
+#rmarkdown::render("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/code/R_markdown/P3_machine_learning_figures.Rmd")
+
+```
