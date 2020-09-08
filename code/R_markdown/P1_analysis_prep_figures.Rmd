@@ -243,3 +243,24 @@ min(t3$age_diff)
 max(t3$age_diff)
 
 ```
+
+
+Species
+```{r}
+
+#all
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$LIB13.C..hominis<40,1,0) %>% table()
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$C..mel.y<40,1,0) %>% table()
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F))$Pan_crypto<40,1,0) %>% table()
+
+# diarrheal
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == T))$LIB13.C..hominis<40,1,0) %>% table()
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == T))$C..mel.y<40,1,0) %>% table()
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == T))$Pan_crypto<40,1,0) %>% table()
+
+# subclin
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F))$LIB13.C..hominis<40,1,0) %>% table()
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F))$C..mel.y<40,1,0) %>% table()
+ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F))$Pan_crypto<40,1,0) %>% table()
+
+```

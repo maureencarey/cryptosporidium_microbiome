@@ -623,6 +623,38 @@ rm(x,y,rf,ps_for_class_rel,ps_for_class,p)
 
 ```
 
+## DATA NOT SHOWN: Does microbiome predict Crypto species at TOD? HERE
+
+```{r}
+
+compare <- c(10,12) # TOD +/- symptoms
+ps_for_class2 <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+x <- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),"data.frame") %>% select(Age.in.days))
+y_hominis <- as.factor(ifelse(sample_data(ps_for_class2)$LIB13.C..hominis <40,1,0))
+y_meleagridis <- as.factor(ifelse(sample_data(ps_for_class2)$C..mel.y <40,1,0))
+
+rf = randomForest(x,y_hominis,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+rf
+predictions = as.data.frame(predict(rf,type="prob"))
+predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed = y_hominis
+ROC_res = roc(ifelse(predictions$observed==0, 0, 1), as.numeric(predictions$`0`))
+auc(ROC_res)
+save(list = c("rf","x","y_hominis"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_hominis_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+rf = randomForest(x,y_meleagridis,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+rf
+predictions = as.data.frame(predict(rf,type="prob"))
+predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed = y_meleagridis
+ROC_res = roc(ifelse(predictions$observed==0, 0, 1), as.numeric(predictions$`0`))
+auc(ROC_res)
+save(list = c("rf","x","y_meleagridis"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_meleagridis_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+
+rm(x,y,rf,ps_for_class2)
+
+```
+
 # Save data for other scripts
 
 ```{r}

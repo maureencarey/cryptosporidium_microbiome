@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
 
 # load packages
-library(ggplot2); library(phyloseq)
+library(ggplot2); library(phyloseq); library(dplyr)
 
 # load data
 load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P5output_plot_2020_09_02.RData")
@@ -52,5 +52,47 @@ length((sample_data(ps_mirzapur_rare)$Child.ID))
 table(sample_data(ps_mirzapur_rare)$Clinical.type)
 min(sample_data(ps_mirzapur_rare)$Date.of.collection)
 max(sample_data(ps_mirzapur_rare)$Date.of.collection)
+
+```
+
+
+Species
+```{r}
+
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
+crypto_cts = burden_all_path %>% filter(crypto == 1) %>%
+  mutate(date_of_collection = as.Date(gsub('.{8}$', '', as.character(DOC)), "%m/%d/%Y")) %>%
+  select(CHILDID, date_of_collection, CRYCTRT, type) %>% filter(CHILDID %in% burden_mirpur$SID)
+rm(list= ls()[! (ls() %in% c('ps_mirzapur_rare','crypto_cts'))])
+
+tempsampledata = sample_data(ps_mirzapur_rare)
+tempsampledata = merge(tempsampledata, crypto_cts %>% select(-type), by.x = c("Child.ID","Date.of.collection"), by.y = c("CHILDID","date_of_collection"), all.x = T)
+tempsampledata[tempsampledata$Clinical.type %in% c(1,2),"CRYCTRT"] = 45 # if predetection, Crypto DNA was not assessed or detected
+
+# get other Ct values (targeted qPCRs)
+all_ct = read.table("~/local_documents/work/crypto_microbiome/data_cannot_be_shared/Cq_values_all.txt",header=TRUE, sep='\t',comment.char = "",stringsAsFactors = F, na.strings = c("#N/A"))
+all_ct[is.na(all_ct)] = 45 # replace #NA and real NAs with 0
+all_ct[all_ct == 0] = 45 # replace #NA and real NAs with 0
+tempsampledata = tempsampledata %>% mutate(sample_id_mod = substr(sample.id,1,nchar(sample.id)-5))
+tempsampledata = merge(tempsampledata, all_ct, by.x = "sample_id_mod", by.y = "sample.id", all.x = T)
+rownames(tempsampledata) = tempsampledata$use_as_rows; tempsampledata$use_as_rows = NULL
+
+#12=diarrhea; 10=Clinic Visit; 1 =pre-clinic visit positive; 2=pre-diarrhea case positive
+
+#all
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(10,12)) %>% select(LIB13.C..hominis)<40,1,0) %>% table()
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(10,12)) %>% select(C..mel.y)<40,1,0) %>% table()
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(10,12)) %>% select(Pan_crypto)<40,1,0) %>% table()
+
+# diarrheal
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(12)) %>% select(LIB13.C..hominis)<40,1,0) %>% table()
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(12)) %>% select(C..mel.y)<40,1,0) %>% table()
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(12)) %>% select(Pan_crypto)<40,1,0) %>% table()
+
+
+# subclin
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(10)) %>% select(LIB13.C..hominis)<40,1,0) %>% table()
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(10)) %>% select(C..mel.y)<40,1,0) %>% table()
+ifelse(tempsampledata %>% filter(Clinical.type %in% c(10)) %>% select(Pan_crypto)<40,1,0) %>% table()
 
 ```

@@ -400,6 +400,66 @@ summary {
 <pre><code>## [1] &quot;01-Apr-16&quot;</code></pre>
 <pre class="r"><code>max(sample_data(ps_mirzapur_rare)$Date.of.collection)</code></pre>
 <pre><code>## [1] &quot;31-Mar-16&quot;</code></pre>
+<p>Species</p>
+<pre class="r"><code>load(&quot;/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData&quot;)
+crypto_cts = burden_all_path %&gt;% filter(crypto == 1) %&gt;%
+  mutate(date_of_collection = as.Date(gsub('.{8}$', '', as.character(DOC)), &quot;%m/%d/%Y&quot;)) %&gt;%
+  select(CHILDID, date_of_collection, CRYCTRT, type) %&gt;% filter(CHILDID %in% burden_mirpur$SID)
+rm(list= ls()[! (ls() %in% c('ps_mirzapur_rare','crypto_cts'))])
+
+tempsampledata = sample_data(ps_mirzapur_rare)
+tempsampledata = merge(tempsampledata, crypto_cts %&gt;% select(-type), by.x = c(&quot;Child.ID&quot;,&quot;Date.of.collection&quot;), by.y = c(&quot;CHILDID&quot;,&quot;date_of_collection&quot;), all.x = T)
+tempsampledata[tempsampledata$Clinical.type %in% c(1,2),&quot;CRYCTRT&quot;] = 45 # if predetection, Crypto DNA was not assessed or detected
+
+# get other Ct values (targeted qPCRs)
+all_ct = read.table(&quot;~/local_documents/work/crypto_microbiome/data_cannot_be_shared/Cq_values_all.txt&quot;,header=TRUE, sep='\t',comment.char = &quot;&quot;,stringsAsFactors = F, na.strings = c(&quot;#N/A&quot;))
+all_ct[is.na(all_ct)] = 45 # replace #NA and real NAs with 0
+all_ct[all_ct == 0] = 45 # replace #NA and real NAs with 0
+tempsampledata = tempsampledata %&gt;% mutate(sample_id_mod = substr(sample.id,1,nchar(sample.id)-5))
+tempsampledata = merge(tempsampledata, all_ct, by.x = &quot;sample_id_mod&quot;, by.y = &quot;sample.id&quot;, all.x = T)
+rownames(tempsampledata) = tempsampledata$use_as_rows; tempsampledata$use_as_rows = NULL
+
+#12=diarrhea; 10=Clinic Visit; 1 =pre-clinic visit positive; 2=pre-diarrhea case positive
+
+#all
+ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(10,12)) %&gt;% select(LIB13.C..hominis)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+##  0  1 
+## 61  2</code></pre>
+<pre class="r"><code>ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(10,12)) %&gt;% select(C..mel.y)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+##  0  1 
+## 21 42</code></pre>
+<pre class="r"><code>ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(10,12)) %&gt;% select(Pan_crypto)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+##  1 
+## 63</code></pre>
+<pre class="r"><code># diarrheal
+ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(12)) %&gt;% select(LIB13.C..hominis)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+## 0 
+## 1</code></pre>
+<pre class="r"><code>ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(12)) %&gt;% select(C..mel.y)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+## 0 
+## 1</code></pre>
+<pre class="r"><code>ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(12)) %&gt;% select(Pan_crypto)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+## 1 
+## 1</code></pre>
+<pre class="r"><code># subclin
+ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(10)) %&gt;% select(LIB13.C..hominis)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+##  0  1 
+## 60  2</code></pre>
+<pre class="r"><code>ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(10)) %&gt;% select(C..mel.y)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+##  0  1 
+## 20 42</code></pre>
+<pre class="r"><code>ifelse(tempsampledata %&gt;% filter(Clinical.type %in% c(10)) %&gt;% select(Pan_crypto)&lt;40,1,0) %&gt;% table()</code></pre>
+<pre><code>## .
+##  1 
+## 62</code></pre>
 </div>
 </div>
 
