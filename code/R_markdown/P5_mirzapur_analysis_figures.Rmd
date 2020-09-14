@@ -16,7 +16,7 @@ knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/crypto
 library(ggplot2); library(phyloseq); library(dplyr)
 
 # load data
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P5output_plot_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P5output_plot_2020_09_11.RData")
 
 # set constants
 SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000); theme_set(theme_bw())
@@ -94,5 +94,8 @@ ifelse(tempsampledata %>% filter(Clinical.type %in% c(12)) %>% select(Pan_crypto
 ifelse(tempsampledata %>% filter(Clinical.type %in% c(10)) %>% select(LIB13.C..hominis)<40,1,0) %>% table()
 ifelse(tempsampledata %>% filter(Clinical.type %in% c(10)) %>% select(C..mel.y)<40,1,0) %>% table()
 ifelse(tempsampledata %>% filter(Clinical.type %in% c(10)) %>% select(Pan_crypto)<40,1,0) %>% table()
+
+
+ntaxa(subset_taxa(ps_mirzapur_rare, Genus == "Megasphaera"))
 
 ```

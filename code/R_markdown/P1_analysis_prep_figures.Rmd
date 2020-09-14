@@ -30,11 +30,11 @@ names(colors) = c('diarrheal','subclinical','no crypto','both')
 # blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
 
 # load data
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_plot_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_plot_2020_09_11.RData")
 
 ```
 
-# Generate supplemental file 1B to get read counts
+# Generate supplemental file 1D to get read counts
 
 ```{r}
 
@@ -62,7 +62,7 @@ Median (filtered) reads per sample: `r median(na.omit(df_summary$nonchim))`
 
 Total samples (excluding controls): `r length(df_summary$sample[!startsWith(df_summary$sample,'neg') & !startsWith(df_summary$sample,'pos') ])`
 
-# Plot positive controls
+# Plot positive controls (Supplemental Figure 1A-B)
 
 ```{r}
 
@@ -145,7 +145,7 @@ Number of samples: `r length(sample_data(ps_rare_diff)$Child.ID)`
 
 Total number of taxa: `r ntaxa(ps_rare_diff)`
 
-# Figure 2
+# Supplemental Figure 4
 
 ``` {r}
 
@@ -160,6 +160,7 @@ ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidi
 ```
 
 # Table 1
+
 ```{r}
 
 ps_raw = readRDS("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/ps_2020_08_12.rds")
@@ -244,7 +245,6 @@ max(t3$age_diff)
 
 ```
 
-
 Species
 ```{r}
 
@@ -262,5 +262,16 @@ ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic
 ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F))$LIB13.C..hominis<40,1,0) %>% table()
 ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F))$C..mel.y<40,1,0) %>% table()
 ifelse(sample_data(subset_samples(ps_rare_diff, pre_detection == F & symptomatic == F))$Pan_crypto<40,1,0) %>% table()
+
+```
+
+How many ASVs map to Prevotella? (For Fig 3 caption)
+```{r}
+
+ntaxa(subset_taxa(ps_rare_diff, Genus == "Prevotella"))
+ntaxa(subset_taxa(ps_rare_diff, Genus == "Bifidobacterium"))
+
+ntaxa(subset_taxa(ps_rare_diff, Genus == "Megasphaera"))
+ntaxa(subset_taxa(ps, Genus == "Megasphaera"))
 
 ```

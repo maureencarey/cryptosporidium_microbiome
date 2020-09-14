@@ -27,8 +27,8 @@ load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_
 total_diarrhea = total_diarrhea  %>% filter(CHILDID %in% burden_mirpur$SID) # remaining kids never were sick
 all_cause_diar = total_diarrhea %>% group_by(CHILDID,study) %>% summarize(episodes = n()) %>% ungroup()
 rm(list= ls()[! (ls() %in% c('all_cause_diar','SEED_INT','colors'))])
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_02.RData")
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_11.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_2020_09_11.RData")
 
 # make useful functions
 randomForest_res = function(x,y,N) { 
@@ -58,7 +58,9 @@ randomForest_res = function(x,y,N) {
 compare <- c(1,2) # predetection -> +/- symptoms
 ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
 
-x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y <- as.factor(sample_data(ps_for_class)$Clinical.type)
 rf <- randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.00015,130))
 save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_PD_" , format(Sys.time(), "%Y_%m_%d")),".RData"))   
@@ -67,7 +69,7 @@ y_for_PD = y
 
 extracted_importance = importance(rf,type=2) # type 2 = node impurity, more useful for auc
 extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
-top10_PD = tail(extracted_importance,10)
+top10_PD = tail(extracted_importance,15)
 
 predictions = as.data.frame(predict(rf,type="prob"))
 predictions$predict <- names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
@@ -87,12 +89,14 @@ rm(x,y,rf,predictions,extracted_importance,ps_for_class)
 
 compare <- c(10,12) # TOD +/- symptoms
 ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
-x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y <- as.factor(sample_data(ps_for_class)$Clinical.type)
 x_for_TOD = x
 y_for_TOD = y
 
-rf = randomForest_res(x_for_TOD,y_for_TOD,10)
+rf = randomForest_res(x_for_TOD,y_for_TOD,15)
 top10_TOD = rf[[4]]
 roc_TOD = rf[[2]]
 AUC_TOD = rf[[3]]
@@ -120,7 +124,9 @@ save(list = c("top10_TOD","top10_PD"), file = paste0(paste0("/Users/maureencarey
 # time-of-detection
 compare <- c(10,12) # TOD +/- symptoms
 ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
-x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y <- as.numeric(as.character(sample_data(ps_for_class)$Number.of.crypto.positive.events))
 y[y!=1] = 2 # merge third infections with second
 
@@ -158,7 +164,9 @@ rm(x,y,rf,ps_for_class)
 # predetection
 compare <- c(1,2) # PD +/- symptoms
 ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
-x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y <- as.numeric(as.character(sample_data(ps_for_class)$Number.of.crypto.positive.events))
 y[y!=1] = 2 # merge third infections with second
 rf = randomForest(x,as.factor(y),importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.1,100))
@@ -189,7 +197,9 @@ ps_for_class2 <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
 all_cause_diar_temp = all_cause_diar %>% filter(CHILDID %in% sample_data(ps_for_class2)$Child.ID)
 all_cause_diar_temp = merge(all_cause_diar_temp, as(sample_data(ps_for_class2)[,1:2], "data.frame"), by.x = "CHILDID", by.y = "Child.ID", all.y = T) %>% select(-study,-CHILDID)
 sample_data(ps_for_class2)$episodes = all_cause_diar_temp$episodes[order(match(all_cause_diar_temp$sample_id_mod, sample_data(ps_for_class2)$sample_id_mod))]
-x <- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),"data.frame") %>% select(Age.in.days))
+x <- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y <- sample_data(ps_for_class2)$episodes
 ## WHY IS THERE AN NA
 y[is.na(y)] = 0
@@ -212,7 +222,9 @@ ps_for_class2 <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
 all_cause_diar_temp = all_cause_diar %>% filter(CHILDID %in% sample_data(ps_for_class2)$Child.ID)
 all_cause_diar_temp = merge(all_cause_diar_temp, as(sample_data(ps_for_class2)[,1:2], "data.frame"), by.x = "CHILDID", by.y = "Child.ID", all.y = T) %>% select(-study,-CHILDID)
 sample_data(ps_for_class2)$episodes = all_cause_diar_temp$episodes[order(match(all_cause_diar_temp$sample_id_mod, sample_data(ps_for_class2)$sample_id_mod))]
-x <- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),"data.frame") %>% select(Age.in.days))
+x <- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y <- sample_data(ps_for_class2)$episodes
 ## WHY IS THERE AN NA
 y[is.na(y)] = 0
@@ -242,7 +254,9 @@ surv_microbes = otu_table(ps_for_surv)
 proper_order = sample_data(ps_for_class)$previous_surv
 surv_microbes = surv_microbes[proper_order]
 
-x <- cbind(cbind(time_of_detect_microbes,surv_microbes), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days))
+x <- cbind(cbind(time_of_detect_microbes,surv_microbes), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y = as.factor(sample_data(subset_samples(ps_for_class, Clinical.type %in% compare))$Clinical.type)
 rf = randomForest_res(x,y,15)
 rf[[1]]
@@ -352,10 +366,12 @@ rownames(keep_for_rf_each_abx2) = keep_for_rf_each_abx2$sample.id; keep_for_rf_e
 abx_history = cbind(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
 rm(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
 
-x_withabx = cbind(cbind(abx_history, otu_table(for_metadata)), as(sample_data(for_metadata),"data.frame") %>% select(Age.in.days))
+x_withabx = cbind(cbind(abx_history, otu_table(for_metadata)), as(sample_data(for_metadata),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
 y = as.factor(sample_data(for_metadata)$Clinical.type)
 
-rf = randomForest_res(x_withabx,y,25)
+rf = randomForest_res(x_withabx,y,15)
 rf[[1]]
 
 top20_TOD_with_abx = rf[[4]]
@@ -431,7 +447,7 @@ tax2 = tidyr::spread(tax, key = model, value = value)  %>% # this line is new he
 plot_tax = tax2 %>% select(pre.detection, time.of.detection, var) %>% melt(id.vars = "var", na.rm = T)
 plot_tax$var = as.factor(plot_tax$var)
 plot_tax$var = reorder(plot_tax$var, -plot_tax$value)
-plot_tax$var <- relevel(plot_tax$var, "ASV19 (Megasphaera)")
+plot_tax$var <- relevel(plot_tax$var, levels(plot_tax$var)[grep("Megasphaera", levels(plot_tax$var))])
 plot_tax_4D = plot_tax
 
 ```
@@ -494,7 +510,8 @@ tax2 = tax %>%
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
 #ASV10 (Collinsella) for PD
 #ASV5 (Parabacteroides) for TOD
-TOD_twoASVs = tax2 %>% filter(var == 'ASV10 (Megasphaera)' | var == 'ASV5 (Parabacteroides)')
+TOD_twoASVs = tax2 %>% filter(var ==  tax2$var[grep("Megasphaera", tax2$var)] | 
+                                var == tax2$var[grep("Parabacteroides", tax2$var)])
 
 tax2_TOD = tax2
 rm(tax, tax2, plt_df)
@@ -519,7 +536,8 @@ tax2 = tax %>%
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
 #ASV10 (Collinsella) for PD
 #ASV5 (Parabacteroides) for TOD
-PD_twoASVs = tax2 %>% filter(var == 'ASV10 (Megasphaera)' | var == 'ASV3 (Collinsella)')
+PD_twoASVs = tax2 %>% filter(var == tax2$var[grep("Megasphaera", tax2$var)] | 
+                                var == tax2$var[grep("Collinsella", tax2$var)])
 tax2_PD = tax2
 
 rm(tax, tax2, plt_df)
@@ -530,8 +548,10 @@ rm(tax, tax2, plt_df)
 
 ```{r}
 
-twoASVs = rbind(TOD_twoASVs %>% filter(var == "ASV10 (Megasphaera)") %>% mutate(time = 'time-of-detection'), 
-                PD_twoASVs %>% filter(var == "ASV10 (Megasphaera)") %>% mutate(time = 'pre-detection'))
+twoASVs = rbind(TOD_twoASVs %>% filter(var == TOD_twoASVs$var[grep("Megasphaera", TOD_twoASVs$var)]) %>% 
+                  mutate(time = 'time-of-detection'), 
+                PD_twoASVs %>% filter(var == PD_twoASVs$var[grep("Megasphaera", PD_twoASVs$var)]) %>% 
+                  mutate(time = 'pre-detection'))
 
 # trying to plot TOD on y axis and PD on x axis
 temp1 = twoASVs %>% select(value_use,symptomatic_use, Genus,time, Child.ID) %>% filter(time == 'time-of-detection') %>% select(-time) %>% dplyr::rename(`time-of-detection` = value_use)
@@ -543,8 +563,8 @@ twoASVs_TOD_wide = tidyr::spread(TOD_twoASVs %>% select(value_use,symptomatic_us
                              key = Genus, value = value_use) %>% 
   mutate(`symptomatic?` = as.factor(symptomatic_use)) 
 
-twoASVs_PD_wide = tidyr::spread(PD_twoASVs %>% select(value_use,symptomatic_use,sample, Genus),
-                             key = Genus, value = value_use) %>% 
+twoASVs_PD_wide = tidyr::spread(PD_twoASVs %>% select(value_use,symptomatic_use,var, sample, Genus),
+                             key = var, value = value_use) %>% 
   mutate(`symptomatic?` = as.factor(symptomatic_use))
 
 count_df_PD_mirpur = twoASVs_PD_wide
@@ -583,7 +603,7 @@ rm(tax, tax2, plt_df)
 ```{r}
 
 plt_df1 = as.data.frame(top10_TOD) %>%rownames_to_column('variable') %>% dplyr::rename(value = top10_TOD) 
-plt_df2 = as.data.frame(top20_TOD_with_abx) %>%rownames_to_column('variable') %>% dplyr::rename(value = top20_TOD_with_abx) %>% top_n(10,value)
+plt_df2 = as.data.frame(top20_TOD_with_abx) %>%rownames_to_column('variable') %>% dplyr::rename(value = top20_TOD_with_abx)
 plt_df = rbind(plt_df1 %>% mutate(model = 'without abx'),plt_df2 %>% mutate(model = 'with abx'))
 plt_df$model = as.factor(plt_df$model)
 
@@ -623,7 +643,7 @@ rm(x,y,rf,ps_for_class_rel,ps_for_class,p)
 
 ```
 
-## DATA NOT SHOWN: Does microbiome predict Crypto species at TOD? HERE
+## DATA NOT SHOWN: Does microbiome predict Crypto species at TOD? 
 
 ```{r}
 

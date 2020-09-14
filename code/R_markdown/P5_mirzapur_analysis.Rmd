@@ -19,10 +19,10 @@ library(rmarkdown); library(dplyr); library(tidyr); library(tibble)
 # load data
 load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
 rm(list= ls()[! (ls() %in% c('left_study_ids'))])
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p2_2020_09_02.RData")
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p3_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p2_2020_09_11.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p3_2020_09_11.RData")
 ps_mirzapur = readRDS("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/ps_2020_08_12.rds")
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p1_2020_09_02.RData") # load save_df1 and save_df2
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_p1_2020_09_11.RData") # load save_df1 and save_df2
 
 # set constants
 SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
@@ -69,11 +69,7 @@ ps_mirzapur_rare = prune_samples(sample_sums(ps_mirzapur) >=rare_min,ps_mirzapur
 ps_mirzapur_rare = prune_samples(!is.na(sample_data(ps_mirzapur_rare)[,"Age.in.days"])[,1],ps_mirzapur_rare) # none removed
 ps_mirzapur_rare = rarefy_even_depth(ps_mirzapur_rare,sample.size=rare_min,rngseed=SEED_INT) # OTUs no longer in the dataset will be removed
 
-# number of Megaspaheara ASVs
-temp = as.data.frame(tax_table(ps_mirzapur_rare))
-dim(temp[temp$Genus == 'Megasphaera',])
-# temp2 = as.data.frame(tax_table(ps_rare))
-# dim(temp2[temp2$Genus == 'Megasphaera',])
+ntaxa(subset_taxa(ps_mirzapur_rare, Genus == "Megasphaera"))
 
 ```
 
@@ -99,7 +95,7 @@ tax2 = tax %>%
                       as.character(Row.names),
                       ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
-twoASVs_TOD = tax2 %>% filter(var == 'ASV10 (Megasphaera)')
+twoASVs_TOD = tax2 %>% filter(var == tax2$var[grep("Megasphaera", tax2$var)])
 
 # get PD values
 plt_df = melt(otu_for_comp_PD %>% rownames_to_column('sample')) %>%
@@ -116,7 +112,7 @@ tax2 = tax %>%
                       as.character(Row.names),
                       ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
-PD_twoASVs = tax2 %>% filter(var == 'ASV10 (Megasphaera)')
+PD_twoASVs = tax2 %>% filter(var == tax2$var[grep("Megasphaera", tax2$var)])
 
 twoASVs = rbind(twoASVs_TOD %>% mutate(time = 'TOD'), PD_twoASVs %>% mutate(time = 'PD'))
 twoASVs_wide = tidyr::spread(twoASVs %>% select(value_use,time,sample, Genus),
@@ -142,8 +138,13 @@ df = melt(df)
 #   scale_fill_manual(values = c('black','grey'), guide = F) +
 #   ylab('Percent of samples with reads') + xlab(NULL)
 
+
+#UPDATE HERE: count_df_PD_mirpur column names have switched from genus to ASV
+count_df_PD_mirzapur
 df_mirz = melt(rbind(count_df_PD_mirzapur, count_df_TOD_mirzapur))  %>% mutate(Site = 'Mirzapur')
-df_mir = melt(rbind(count_df_PD_mirpur %>% select(-symptomatic_use,-Collinsella,-`symptomatic?`) %>% 
+df_mir = melt(rbind(count_df_PD_mirpur %>% 
+                      rename(Megasphaera= `ASV15 (Megasphaera)`) %>%
+                      select(sample, Megasphaera) %>% 
                       mutate(time = 'pre-detection'), 
                     count_df_TOD_mirpur %>% select(-symptomatic_use,-Parabacteroides,-`symptomatic?`) %>% 
                       mutate(time = 'time-of-detection'))) %>% mutate(Site = 'Mirpur')

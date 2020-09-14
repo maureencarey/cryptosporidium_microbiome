@@ -22,7 +22,7 @@ names(colors) = c('diarrheal','subclinical','no crypto','both')
 # blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
 
 # load data
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P4output_plot_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P4output_plot_2020_09_11.RData")
 
 ```
 
@@ -71,5 +71,12 @@ ggplot(tod_tax2) +
                    aes(x = log2FoldChange, y = sig, color = as.factor(col2), label = var)) + xlim(-5,4)
 ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/FOR_REF_Fig4B_univar_TOD.png",
        width = 5,height = 5,units = "in",dpi = 300)
+
+```
+
+Megasphaera fold change
+```{r}
+
+tod_tax2 %>% filter(Genus == 'Megasphaera', size2 == 1) %>% select(log2FoldChange,padj)
 
 ```

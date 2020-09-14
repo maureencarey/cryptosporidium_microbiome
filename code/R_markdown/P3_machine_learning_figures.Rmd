@@ -22,7 +22,12 @@ names(colors) = c('diarrheal','subclinical','no crypto','both')
 # blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
 
 # load data
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_2020_09_02.RData")
+#load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_2020_09_02.RData")
+#load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_2020_09_10.RData")
+#load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/cmel_P3output_plot_2020_09_11.RData")
+#load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/chom_P3output_plot_2020_09_11.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_2020_09_11.RData")
+#load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/WOC_P3output_plot_2020_09_11.RData")
 
 ```
 
@@ -57,7 +62,7 @@ plot_tax_4D %>%
   coord_flip() + 
   theme(legend.position = c(.76, 0.13), 
         axis.text.x = element_text(size = 7),
-        legend.title=element_text(size=10), 
+        legend.title=element_blank(), 
         legend.text=element_text(size=8))  + scale_x_discrete(limits = rev(levels(plot_tax_4D$var)))
 ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4D_imp_var_microbiome_mirpur.png",
        width = 4.5,height = 4,units = "in",dpi = 300)
@@ -112,7 +117,7 @@ ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidi
 ggplot(twoASVs, aes(x = var, y = value_use, color = symptomatic_use)) + 
   geom_boxplot(outlier.shape = NA) + 
   geom_point(alpha = 0.5, position = position_jitterdodge(jitter.width = 0.2, jitter.height = 0, dodge.width = 0.75, seed = SEED_INT)) + 
-  facet_wrap(~time) +
+  facet_wrap(~time, scales = "free_x") +
   scale_color_manual(values= colors[1:2]) +
   scale_y_sqrt() + ylab('relative abundance') + xlab(NULL) + 
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
@@ -121,18 +126,6 @@ ggplot(twoASVs, aes(x = var, y = value_use, color = symptomatic_use)) +
   geom_hline(yintercept = 0.2, linetype = 'dotted', alpha = .75)
 ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4E_mega.png",
        width = 3.2,height = 4,units = "in",dpi = 300)
-
-ggplot(two_WIDE, aes(x = `time-of-detection`, y = `pre-detection`, color = `symptomatic?`)) +
-  geom_jitter(alpha = 0.5, position = position_jitter(width = 0.01, height = 0.01, seed = SEED_INT)) +
-  scale_color_manual(values = colors[1:2]) + scale_x_sqrt() + scale_y_sqrt()+
-  theme(panel.grid.minor = element_blank(),
-        legend.position="bottom")
-
-ggplot(two_WIDE, aes(x = `time-of-detection`, y = `pre-detection`, color = `symptomatic?`)) +
-  geom_point(alpha = 0.5) +
-  scale_color_manual(values = colors[1:2]) + scale_x_sqrt() + scale_y_sqrt()+
-  theme(panel.grid.minor = element_blank(),
-        legend.position="bottom")
 
 ```
 
@@ -179,7 +172,9 @@ p
 
 ```{r}
 
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_TOD_abx_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_TOD_abx_2020_09_11.RData")
+#load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/WOC_rf_TOD_abx_2020_09_11.RData")
+
 AUC_TOD_abx = rf[[3]]
 rm(rf)
 roc_list = list(roc_TOD,roc_TOD_abx)
@@ -198,7 +193,7 @@ ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidi
 
 tax2_abx %>%
   ggplot() +geom_bar(aes(x=reorder(var,value), y = value, fill = model),stat = "identity", width=0.4, position = position_dodge(width=0.5)) +
-  scale_fill_manual(values = c("black","grey")) +
+  scale_fill_manual(values = c("grey","blue")) +
   xlab(NULL) + ylab('Mean decrease in node impurity') + #facet_wrap(~tod_or_pre, scales = "free_x") +
   coord_flip()
 ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig5B_imp_var_abx_mirpur.png",

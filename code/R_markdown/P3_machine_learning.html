@@ -378,7 +378,9 @@ summary {
 <pre class="r"><code>compare &lt;- c(1,2) # predetection -&gt; +/- symptoms
 ps_for_class &lt;- subset_samples(ps_rare_diff, Clinical.type %in% compare)
 
-x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y &lt;- as.factor(sample_data(ps_for_class)$Clinical.type)
 rf &lt;- randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.00015,130))
 save(list = c(&quot;rf&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_PD_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))   
@@ -387,7 +389,7 @@ y_for_PD = y
 
 extracted_importance = importance(rf,type=2) # type 2 = node impurity, more useful for auc
 extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
-top10_PD = tail(extracted_importance,10)
+top10_PD = tail(extracted_importance,15)
 
 predictions = as.data.frame(predict(rf,type=&quot;prob&quot;))
 predictions$predict &lt;- names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
@@ -398,26 +400,28 @@ roc_PD &lt;- roc(ifelse(predictions$observed==1, 1, 2), as.numeric(predictions$`
 <pre><code>## Setting direction: controls &lt; cases</code></pre>
 <pre class="r"><code>AUC_PD = auc(roc_PD)
 AUC_PD</code></pre>
-<pre><code>## Area under the curve: 0.6296</code></pre>
+<pre><code>## Area under the curve: 0.6349</code></pre>
 <pre class="r"><code>rm(x,y,rf,predictions,extracted_importance,ps_for_class)</code></pre>
 </div>
 <div id="can-we-predict-whether-a-sample-was-sub-clinical-or-diarrheal-from-tod-microbiota" class="section level1">
 <h1>Can we predict whether a sample was sub-clinical or diarrheal from TOD microbiota?</h1>
 <pre class="r"><code>compare &lt;- c(10,12) # TOD +/- symptoms
 ps_for_class &lt;- subset_samples(ps_rare_diff, Clinical.type %in% compare)
-x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y &lt;- as.factor(sample_data(ps_for_class)$Clinical.type)
 x_for_TOD = x
 y_for_TOD = y
 
-rf = randomForest_res(x_for_TOD,y_for_TOD,10)</code></pre>
+rf = randomForest_res(x_for_TOD,y_for_TOD,15)</code></pre>
 <pre><code>## Setting levels: control = 10, case = 12</code></pre>
 <pre><code>## Setting direction: controls &gt; cases</code></pre>
 <pre class="r"><code>top10_TOD = rf[[4]]
 roc_TOD = rf[[2]]
 AUC_TOD = rf[[3]]
 AUC_TOD</code></pre>
-<pre><code>## Area under the curve: 0.6414</code></pre>
+<pre><code>## Area under the curve: 0.6382</code></pre>
 <pre class="r"><code>rf = rf[[1]]
 # use this on rivanna for faster computing
 save(list = c(&quot;rf&quot;,&quot;x&quot;,&quot;y&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_TOD_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))  
@@ -431,7 +435,9 @@ rm(x,y,rf,ps_for_class)</code></pre>
 <pre class="r"><code># time-of-detection
 compare &lt;- c(10,12) # TOD +/- symptoms
 ps_for_class &lt;- subset_samples(ps_rare_diff, Clinical.type %in% compare)
-x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y &lt;- as.numeric(as.character(sample_data(ps_for_class)$Number.of.crypto.positive.events))
 y[y!=1] = 2 # merge third infections with second
 
@@ -449,7 +455,7 @@ rf</code></pre>
 ## Call:
 ##  randomForest(x = x, y = as.factor(y), ntree = 50 * dim(x)[[2]],      replace = TRUE, classwt = c(0.1, 100), nodesize = 1, importance = TRUE) 
 ##                Type of random forest: classification
-##                      Number of trees: 44800
+##                      Number of trees: 44900
 ## No. of variables tried at each split: 29
 ## 
 ##         OOB estimate of  error rate: 26.37%
@@ -471,7 +477,7 @@ ROC_first_infection = roc(ifelse(predictions$observed==1, 1, 2), as.numeric(pred
 <pre><code>## Setting levels: control = 1, case = 2</code></pre>
 <pre><code>## Setting direction: controls &gt; cases</code></pre>
 <pre class="r"><code>auc(ROC_first_infection) </code></pre>
-<pre><code>## Area under the curve: 0.6551</code></pre>
+<pre><code>## Area under the curve: 0.6653</code></pre>
 <pre class="r"><code>rm(x,y,rf,ps_for_class)</code></pre>
 </div>
 <div id="data-not-shown-can-we-predict-whether-a-sample-was-a-first-or-second-infection-from-pd-microbiota" class="section level2">
@@ -479,7 +485,9 @@ ROC_first_infection = roc(ifelse(predictions$observed==1, 1, 2), as.numeric(pred
 <pre class="r"><code># predetection
 compare &lt;- c(1,2) # PD +/- symptoms
 ps_for_class &lt;- subset_samples(ps_rare_diff, Clinical.type %in% compare)
-x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x &lt;- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y &lt;- as.numeric(as.character(sample_data(ps_for_class)$Number.of.crypto.positive.events))
 y[y!=1] = 2 # merge third infections with second
 rf = randomForest(x,as.factor(y),importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.1,100))
@@ -488,7 +496,7 @@ rf</code></pre>
 ## Call:
 ##  randomForest(x = x, y = as.factor(y), ntree = 50 * dim(x)[[2]],      replace = TRUE, classwt = c(0.1, 100), nodesize = 1, importance = TRUE) 
 ##                Type of random forest: classification
-##                      Number of trees: 44800
+##                      Number of trees: 44900
 ## No. of variables tried at each split: 29
 ## 
 ##         OOB estimate of  error rate: 26.37%
@@ -510,7 +518,7 @@ ROC_first_infection = roc(ifelse(predictions$observed==1, 1, 2), as.numeric(pred
 <pre><code>## Setting levels: control = 1, case = 2</code></pre>
 <pre><code>## Setting direction: controls &gt; cases</code></pre>
 <pre class="r"><code>auc(ROC_first_infection) </code></pre>
-<pre><code>## Area under the curve: 0.6259</code></pre>
+<pre><code>## Area under the curve: 0.6286</code></pre>
 <pre class="r"><code>rm(x,y,rf,ps_for_class)</code></pre>
 </div>
 <div id="data-not-shown-can-we-predict-all-cause-diarrhea-from-tod-microbiota" class="section level2">
@@ -520,7 +528,9 @@ ps_for_class2 &lt;- subset_samples(ps_rare_diff, Clinical.type %in% compare)
 all_cause_diar_temp = all_cause_diar %&gt;% filter(CHILDID %in% sample_data(ps_for_class2)$Child.ID)
 all_cause_diar_temp = merge(all_cause_diar_temp, as(sample_data(ps_for_class2)[,1:2], &quot;data.frame&quot;), by.x = &quot;CHILDID&quot;, by.y = &quot;Child.ID&quot;, all.y = T) %&gt;% select(-study,-CHILDID)
 sample_data(ps_for_class2)$episodes = all_cause_diar_temp$episodes[order(match(all_cause_diar_temp$sample_id_mod, sample_data(ps_for_class2)$sample_id_mod))]
-x &lt;- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x &lt;- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y &lt;- sample_data(ps_for_class2)$episodes
 ## WHY IS THERE AN NA
 y[is.na(y)] = 0
@@ -531,11 +541,11 @@ rf</code></pre>
 ## Call:
 ##  randomForest(x = x, y = y, ntree = 50 * dim(x)[[2]], replace = TRUE,      classwt = c(0.0001, 100), nodesize = 1, importance = TRUE) 
 ##                Type of random forest: regression
-##                      Number of trees: 44800
-## No. of variables tried at each split: 298
+##                      Number of trees: 44900
+## No. of variables tried at each split: 299
 ## 
-##           Mean of squared residuals: 34.20075
-##                     % Var explained: -12.51</code></pre>
+##           Mean of squared residuals: 34.27948
+##                     % Var explained: -12.77</code></pre>
 <pre class="r"><code>save(list = c(&quot;rf&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_all_diar_fromTOD_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))  
 
 rm(x,y,rf,ps_for_class2)</code></pre>
@@ -547,7 +557,9 @@ ps_for_class2 &lt;- subset_samples(ps_rare_diff, Clinical.type %in% compare)
 all_cause_diar_temp = all_cause_diar %&gt;% filter(CHILDID %in% sample_data(ps_for_class2)$Child.ID)
 all_cause_diar_temp = merge(all_cause_diar_temp, as(sample_data(ps_for_class2)[,1:2], &quot;data.frame&quot;), by.x = &quot;CHILDID&quot;, by.y = &quot;Child.ID&quot;, all.y = T) %&gt;% select(-study,-CHILDID)
 sample_data(ps_for_class2)$episodes = all_cause_diar_temp$episodes[order(match(all_cause_diar_temp$sample_id_mod, sample_data(ps_for_class2)$sample_id_mod))]
-x &lt;- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x &lt;- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y &lt;- sample_data(ps_for_class2)$episodes
 ## WHY IS THERE AN NA
 y[is.na(y)] = 0
@@ -558,11 +570,11 @@ rf</code></pre>
 ## Call:
 ##  randomForest(x = x, y = y, ntree = 50 * dim(x)[[2]], replace = TRUE,      classwt = c(0.0001, 100), nodesize = 1, importance = TRUE) 
 ##                Type of random forest: regression
-##                      Number of trees: 44800
-## No. of variables tried at each split: 298
+##                      Number of trees: 44900
+## No. of variables tried at each split: 299
 ## 
-##           Mean of squared residuals: 34.34364
-##                     % Var explained: -12.98</code></pre>
+##           Mean of squared residuals: 34.33321
+##                     % Var explained: -12.95</code></pre>
 <pre class="r"><code>save(list = c(&quot;rf&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_all_diar_fromPD_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))  
 
 rm(x,y,rf,ps_for_class2)</code></pre>
@@ -584,7 +596,9 @@ surv_microbes = otu_table(ps_for_surv)
 proper_order = sample_data(ps_for_class)$previous_surv
 surv_microbes = surv_microbes[proper_order]
 
-x &lt;- cbind(cbind(time_of_detect_microbes,surv_microbes), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x &lt;- cbind(cbind(time_of_detect_microbes,surv_microbes), as(sample_data(ps_for_class),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y = as.factor(sample_data(subset_samples(ps_for_class, Clinical.type %in% compare))$Clinical.type)
 rf = randomForest_res(x,y,15)</code></pre>
 <pre><code>## Setting levels: control = 10, case = 12</code></pre>
@@ -594,19 +608,19 @@ rf = randomForest_res(x,y,15)</code></pre>
 ## Call:
 ##  randomForest(x = x, y = y, ntree = 50 * dim(x)[[2]], replace = TRUE,      classwt = c(0.0001, 100), nodesize = 1, importance = TRUE) 
 ##                Type of random forest: classification
-##                      Number of trees: 89550
+##                      Number of trees: 89650
 ## No. of variables tried at each split: 42
 ## 
-##         OOB estimate of  error rate: 57.14%
+##         OOB estimate of  error rate: 56.04%
 ## Confusion matrix:
 ##    10 12 class.error
-## 10 12 48   0.8000000
+## 10 13 47   0.7833333
 ## 12  4 27   0.1290323</code></pre>
 <pre class="r"><code>top_15_for_all_microbiome = rf[[4]]
 roc_allM = rf[[2]]
 AUC_allM = rf[[3]]
 AUC_allM</code></pre>
-<pre><code>## Area under the curve: 0.5462</code></pre>
+<pre><code>## Area under the curve: 0.5495</code></pre>
 <pre class="r"><code>rm(rf, x,y,proper_order,ps_for_surv)</code></pre>
 <div id="can-we-predict-whether-a-sample-was-sub-clinical-or-diarrheal-from-pd-tod-microbiota-and-metadata" class="section level2">
 <h2>Can we predict whether a sample was sub-clinical or diarrheal from PD &amp; TOD microbiota AND metadata?</h2>
@@ -633,7 +647,7 @@ x = cbind(time_of_detect_microbes,meta_for_rf,surv_microbes)
 y = as.factor(sample_data(subset_samples(ps_for_class, Clinical.type %in% compare))$Clinical.type)
 rf = randomForest_res(x,y,20)</code></pre>
 <pre><code>## Setting levels: control = 10, case = 12</code></pre>
-<pre><code>## Setting direction: controls &lt; cases</code></pre>
+<pre><code>## Setting direction: controls &gt; cases</code></pre>
 <pre class="r"><code>rf[[1]]</code></pre>
 <pre><code>## 
 ## Call:
@@ -642,16 +656,16 @@ rf = randomForest_res(x,y,20)</code></pre>
 ##                      Number of trees: 90450
 ## No. of variables tried at each split: 42
 ## 
-##         OOB estimate of  error rate: 57.14%
+##         OOB estimate of  error rate: 56.04%
 ## Confusion matrix:
 ##    10 12 class.error
-## 10 15 45   0.7500000
+## 10 16 44   0.7333333
 ## 12  7 24   0.2258065</code></pre>
 <pre class="r"><code>top15_without_abx = rf[[4]]
 roc_allM_M = rf[[2]]
 AUC_allM_M = rf[[3]]
 AUC_allM_M</code></pre>
-<pre><code>## Area under the curve: 0.4602</code></pre>
+<pre><code>## Area under the curve: 0.5478</code></pre>
 <pre class="r"><code>rm(rf,x,y,ps_for_class)</code></pre>
 </div>
 <div id="prep-abx-data-for-integration-into-model" class="section level1">
@@ -711,10 +725,12 @@ rownames(keep_for_rf_each_abx2) = keep_for_rf_each_abx2$sample.id; keep_for_rf_e
 abx_history = cbind(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
 rm(keep_for_rf_all_abx2,keep_for_rf_each_abx2)
 
-x_withabx = cbind(cbind(abx_history, otu_table(for_metadata)), as(sample_data(for_metadata),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+x_withabx = cbind(cbind(abx_history, otu_table(for_metadata)), as(sample_data(for_metadata),&quot;data.frame&quot;) %&gt;% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %&gt;% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis &lt;40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y &lt;40,1,0))) %&gt;% select(-LIB13.C..hominis,-C..mel.y)
 y = as.factor(sample_data(for_metadata)$Clinical.type)
 
-rf = randomForest_res(x_withabx,y,25)</code></pre>
+rf = randomForest_res(x_withabx,y,15)</code></pre>
 <pre><code>## Setting levels: control = 10, case = 12</code></pre>
 <pre><code>## Setting direction: controls &gt; cases</code></pre>
 <pre class="r"><code>rf[[1]]</code></pre>
@@ -722,7 +738,7 @@ rf = randomForest_res(x_withabx,y,25)</code></pre>
 ## Call:
 ##  randomForest(x = x, y = y, ntree = 50 * dim(x)[[2]], replace = TRUE,      classwt = c(0.0001, 100), nodesize = 1, importance = TRUE) 
 ##                Type of random forest: classification
-##                      Number of trees: 45500
+##                      Number of trees: 45600
 ## No. of variables tried at each split: 30
 ## 
 ##         OOB estimate of  error rate: 51.65%
@@ -734,7 +750,7 @@ rf = randomForest_res(x_withabx,y,25)</code></pre>
 roc_TOD_abx = rf[[2]]
 AUC_TOD_abx = rf[[3]]
 AUC_TOD_abx</code></pre>
-<pre><code>## Area under the curve: 0.6538</code></pre>
+<pre><code>## Area under the curve: 0.6581</code></pre>
 <pre class="r"><code>save(list = c(&quot;rf&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_TOD_abx_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))  
 
 rm(rf,x_withabx,y)</code></pre>
@@ -754,16 +770,16 @@ rf = randomForest_res(x,y,15)</code></pre>
 ##                      Number of trees: 1650
 ## No. of variables tried at each split: 5
 ## 
-##         OOB estimate of  error rate: 52.75%
+##         OOB estimate of  error rate: 53.85%
 ## Confusion matrix:
 ##    10 12 class.error
-## 10 31 29   0.4833333
+## 10 30 30   0.5000000
 ## 12 19 12   0.6129032</code></pre>
 <pre class="r"><code>top15_metadata_with_abx = rf[[4]]
 roc_meta_abx = rf[[2]]
 AUC_meta_abx = rf[[3]]
 AUC_meta_abx</code></pre>
-<pre><code>## Area under the curve: 0.4987</code></pre>
+<pre><code>## Area under the curve: 0.4965</code></pre>
 <pre class="r"><code>save(list = c(&quot;rf&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_meta_abx_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))  
 
 rf = randomForest_res(limited_metadata,y,15)</code></pre>
@@ -777,16 +793,16 @@ rf = randomForest_res(limited_metadata,y,15)</code></pre>
 ##                      Number of trees: 950
 ## No. of variables tried at each split: 4
 ## 
-##         OOB estimate of  error rate: 53.85%
+##         OOB estimate of  error rate: 57.14%
 ## Confusion matrix:
 ##    10 12 class.error
-## 10 28 32   0.5333333
+## 10 25 35   0.5833333
 ## 12 17 14   0.5483871</code></pre>
 <pre class="r"><code>top15_metadata_without_abx = rf[[4]]
 roc_meta_no_abx = rf[[2]]
 AUC_meta_no_abx = rf[[3]]
 AUC_meta_no_abx</code></pre>
-<pre><code>## Area under the curve: 0.5151</code></pre>
+<pre><code>## Area under the curve: 0.5516</code></pre>
 <pre class="r"><code>save(list = c(&quot;rf&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_meta_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))  
 
 rm(rf,x,y,limited_metadata)
@@ -821,7 +837,7 @@ tax2 = tidyr::spread(tax, key = model, value = value)  %&gt;% # this line is new
 plot_tax = tax2 %&gt;% select(pre.detection, time.of.detection, var) %&gt;% melt(id.vars = &quot;var&quot;, na.rm = T)
 plot_tax$var = as.factor(plot_tax$var)
 plot_tax$var = reorder(plot_tax$var, -plot_tax$value)
-plot_tax$var &lt;- relevel(plot_tax$var, &quot;ASV19 (Megasphaera)&quot;)
+plot_tax$var &lt;- relevel(plot_tax$var, levels(plot_tax$var)[grep(&quot;Megasphaera&quot;, levels(plot_tax$var))])
 plot_tax_4D = plot_tax</code></pre>
 <div id="save-data-for-interaction-plots---interested-but-data-not-shown-also-needs-to-be-performed-on-a-computer-with-more-mem-than-my-laptop" class="section level2">
 <h2>Save data for interaction plots - interested but DATA NOT SHOWN (Also, needs to be performed on a computer with more mem than my laptop)</h2>
@@ -863,6 +879,8 @@ plt_df = melt(otu_TOD) %&gt;%
   tidyr::separate(sample, c(&quot;sample&quot;, &quot;remove_extra&quot;)) %&gt;%
   select(-remove_extra) </code></pre>
 <pre><code>## Using sample, symptomatic, Child.ID as id variables</code></pre>
+<pre><code>## Warning: Expected 2 pieces. Missing pieces filled with `NA` in 1365 rows [1, 2,
+## 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...].</code></pre>
 <pre class="r"><code>tax = tax_table(ps_rare_diff)
 tax = tax[rownames(tax) %in% plt_df$variable,]
 tax = merge(tax,plt_df, by.x= 'row.names', by.y = &quot;variable&quot;, all.x = F, all.y = T)
@@ -875,7 +893,8 @@ tax2 = tax %&gt;%
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
 #ASV10 (Collinsella) for PD
 #ASV5 (Parabacteroides) for TOD
-TOD_twoASVs = tax2 %&gt;% filter(var == 'ASV10 (Megasphaera)' | var == 'ASV5 (Parabacteroides)')
+TOD_twoASVs = tax2 %&gt;% filter(var ==  tax2$var[grep(&quot;Megasphaera&quot;, tax2$var)] | 
+                                var == tax2$var[grep(&quot;Parabacteroides&quot;, tax2$var)])
 
 tax2_TOD = tax2
 rm(tax, tax2, plt_df)
@@ -888,6 +907,8 @@ plt_df = melt(otu_PD) %&gt;%
   tidyr::separate(sample, c(&quot;sample&quot;, &quot;remove_extra&quot;)) %&gt;%
   select(-remove_extra) </code></pre>
 <pre><code>## Using sample, symptomatic, Child.ID as id variables</code></pre>
+<pre><code>## Warning: Expected 2 pieces. Missing pieces filled with `NA` in 1365 rows [1, 2,
+## 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, ...].</code></pre>
 <pre class="r"><code>tax = tax_table(ps_rare_diff)
 tax = tax[rownames(tax) %in% plt_df$variable,]
 tax = merge(tax,plt_df, by.x= 'row.names', by.y = &quot;variable&quot;, all.x = F, all.y = T)
@@ -900,16 +921,21 @@ tax2 = tax %&gt;%
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
 #ASV10 (Collinsella) for PD
 #ASV5 (Parabacteroides) for TOD
-PD_twoASVs = tax2 %&gt;% filter(var == 'ASV10 (Megasphaera)' | var == 'ASV3 (Collinsella)')
-tax2_PD = tax2
+PD_twoASVs = tax2 %&gt;% filter(var == tax2$var[grep(&quot;Megasphaera&quot;, tax2$var)] | 
+                                var == tax2$var[grep(&quot;Collinsella&quot;, tax2$var)])</code></pre>
+<pre><code>## Warning in var == tax2$var[grep(&quot;Collinsella&quot;, tax2$var)]: longer object length
+## is not a multiple of shorter object length</code></pre>
+<pre class="r"><code>tax2_PD = tax2
 
 rm(tax, tax2, plt_df)</code></pre>
 </div>
 </div>
 <div id="prep-for-figure-4e---important-variables" class="section level1">
 <h1>Prep for Figure 4E - important variables</h1>
-<pre class="r"><code>twoASVs = rbind(TOD_twoASVs %&gt;% filter(var == &quot;ASV10 (Megasphaera)&quot;) %&gt;% mutate(time = 'time-of-detection'), 
-                PD_twoASVs %&gt;% filter(var == &quot;ASV10 (Megasphaera)&quot;) %&gt;% mutate(time = 'pre-detection'))
+<pre class="r"><code>twoASVs = rbind(TOD_twoASVs %&gt;% filter(var == TOD_twoASVs$var[grep(&quot;Megasphaera&quot;, TOD_twoASVs$var)]) %&gt;% 
+                  mutate(time = 'time-of-detection'), 
+                PD_twoASVs %&gt;% filter(var == PD_twoASVs$var[grep(&quot;Megasphaera&quot;, PD_twoASVs$var)]) %&gt;% 
+                  mutate(time = 'pre-detection'))
 
 # trying to plot TOD on y axis and PD on x axis
 temp1 = twoASVs %&gt;% select(value_use,symptomatic_use, Genus,time, Child.ID) %&gt;% filter(time == 'time-of-detection') %&gt;% select(-time) %&gt;% dplyr::rename(`time-of-detection` = value_use)
@@ -921,8 +947,8 @@ twoASVs_TOD_wide = tidyr::spread(TOD_twoASVs %&gt;% select(value_use,symptomatic
                              key = Genus, value = value_use) %&gt;% 
   mutate(`symptomatic?` = as.factor(symptomatic_use)) 
 
-twoASVs_PD_wide = tidyr::spread(PD_twoASVs %&gt;% select(value_use,symptomatic_use,sample, Genus),
-                             key = Genus, value = value_use) %&gt;% 
+twoASVs_PD_wide = tidyr::spread(PD_twoASVs %&gt;% select(value_use,symptomatic_use,var, sample, Genus),
+                             key = var, value = value_use) %&gt;% 
   mutate(`symptomatic?` = as.factor(symptomatic_use))
 
 count_df_PD_mirpur = twoASVs_PD_wide
@@ -953,7 +979,7 @@ rm(tax, tax2, plt_df)</code></pre>
 <div id="prep-supplemental-figure-5---roc-and-important-variables-adding-in-abx-to-model" class="section level1">
 <h1>Prep Supplemental Figure 5 - ROC and Important variables, Adding in Abx to model</h1>
 <pre class="r"><code>plt_df1 = as.data.frame(top10_TOD) %&gt;%rownames_to_column('variable') %&gt;% dplyr::rename(value = top10_TOD) 
-plt_df2 = as.data.frame(top20_TOD_with_abx) %&gt;%rownames_to_column('variable') %&gt;% dplyr::rename(value = top20_TOD_with_abx) %&gt;% top_n(10,value)
+plt_df2 = as.data.frame(top20_TOD_with_abx) %&gt;%rownames_to_column('variable') %&gt;% dplyr::rename(value = top20_TOD_with_abx)
 plt_df = rbind(plt_df1 %&gt;% mutate(model = 'without abx'),plt_df2 %&gt;% mutate(model = 'with abx'))
 plt_df$model = as.factor(plt_df$model)
 
@@ -989,6 +1015,65 @@ roc_change = rf
 rm(x,y,rf,ps_for_class_rel,ps_for_class,p)</code></pre>
 <pre><code>## Warning in rm(x, y, rf, ps_for_class_rel, ps_for_class, p): object 'p' not found</code></pre>
 </div>
+<div id="data-not-shown-does-microbiome-predict-crypto-species-at-tod" class="section level2">
+<h2>DATA NOT SHOWN: Does microbiome predict Crypto species at TOD?</h2>
+<pre class="r"><code>compare &lt;- c(10,12) # TOD +/- symptoms
+ps_for_class2 &lt;- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+x &lt;- cbind(otu_table(ps_for_class2), as(sample_data(ps_for_class2),&quot;data.frame&quot;) %&gt;% select(Age.in.days))
+y_hominis &lt;- as.factor(ifelse(sample_data(ps_for_class2)$LIB13.C..hominis &lt;40,1,0))
+y_meleagridis &lt;- as.factor(ifelse(sample_data(ps_for_class2)$C..mel.y &lt;40,1,0))
+
+rf = randomForest(x,y_hominis,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+rf</code></pre>
+<pre><code>## 
+## Call:
+##  randomForest(x = x, y = y_hominis, ntree = 50 * dim(x)[[2]],      replace = TRUE, classwt = c(0.0001, 100), nodesize = 1, importance = TRUE) 
+##                Type of random forest: classification
+##                      Number of trees: 44800
+## No. of variables tried at each split: 29
+## 
+##         OOB estimate of  error rate: 40.66%
+## Confusion matrix:
+##   0  1 class.error
+## 0 0 37           1
+## 1 0 54           0</code></pre>
+<pre class="r"><code>predictions = as.data.frame(predict(rf,type=&quot;prob&quot;))
+predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed = y_hominis
+ROC_res = roc(ifelse(predictions$observed==0, 0, 1), as.numeric(predictions$`0`))</code></pre>
+<pre><code>## Setting levels: control = 0, case = 1</code></pre>
+<pre><code>## Setting direction: controls &lt; cases</code></pre>
+<pre class="r"><code>auc(ROC_res)</code></pre>
+<pre><code>## Area under the curve: 0.523</code></pre>
+<pre class="r"><code>save(list = c(&quot;rf&quot;,&quot;x&quot;,&quot;y_hominis&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_hominis_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))  
+
+rf = randomForest(x,y_meleagridis,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+rf</code></pre>
+<pre><code>## 
+## Call:
+##  randomForest(x = x, y = y_meleagridis, ntree = 50 * dim(x)[[2]],      replace = TRUE, classwt = c(0.0001, 100), nodesize = 1, importance = TRUE) 
+##                Type of random forest: classification
+##                      Number of trees: 44800
+## No. of variables tried at each split: 29
+## 
+##         OOB estimate of  error rate: 6.59%
+## Confusion matrix:
+##    0 1 class.error
+## 0 85 0           0
+## 1  6 0           1</code></pre>
+<pre class="r"><code>predictions = as.data.frame(predict(rf,type=&quot;prob&quot;))
+predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed = y_meleagridis
+ROC_res = roc(ifelse(predictions$observed==0, 0, 1), as.numeric(predictions$`0`))</code></pre>
+<pre><code>## Setting levels: control = 0, case = 1
+## Setting direction: controls &lt; cases</code></pre>
+<pre class="r"><code>auc(ROC_res)</code></pre>
+<pre><code>## Area under the curve: 0.6275</code></pre>
+<pre class="r"><code>save(list = c(&quot;rf&quot;,&quot;x&quot;,&quot;y_meleagridis&quot;), file = paste0(paste0(&quot;~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/rf_meleagridis_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))
+
+rm(x,y,rf,ps_for_class2)</code></pre>
+<pre><code>## Warning in rm(x, y, rf, ps_for_class2): object 'y' not found</code></pre>
+</div>
 </div>
 <div id="save-data-for-other-scripts-1" class="section level1">
 <h1>Save data for other scripts</h1>
@@ -996,7 +1081,7 @@ rm(x,y,rf,ps_for_class_rel,ps_for_class,p)</code></pre>
 # 
 # save(list = c(&quot;predetection_tax2&quot;,&quot;tod_tax2&quot;), file = paste0(paste0(&quot;/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))
 
-save(list = c(&quot;chi_df&quot;,&quot;roc_TOD&quot;,&quot;roc_PD&quot;,&quot;plot_tax_4D&quot;,&quot;otu_PD&quot;,&quot;tax2_TOD&quot;,&quot;tax2_PD&quot;,&quot;twoASVs&quot;,&quot;two_WIDE&quot;,&quot;tax2_infect&quot;,&quot;roc_TOD&quot;,&quot;roc_TOD_abx&quot;,&quot;tax2_abx&quot;,&quot;roc_change&quot;,&quot;roc_allM_M&quot;,&quot;roc_allM&quot;,&quot;AUC_TOD&quot;,&quot;AUC_PD&quot;,&quot;AUC_allM&quot;,&quot;AUC_allM_M&quot;), file = paste0(paste0(&quot;/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))</code></pre>
+save(list = c(&quot;chi_df&quot;,&quot;roc_TOD&quot;,&quot;roc_PD&quot;,&quot;plot_tax_4D&quot;,&quot;otu_PD&quot;,&quot;tax2_TOD&quot;,&quot;tax2_PD&quot;,&quot;twoASVs&quot;,&quot;two_WIDE&quot;,&quot;tax2_infect&quot;,&quot;roc_TOD&quot;,&quot;roc_TOD_abx&quot;,&quot;tax2_abx&quot;,&quot;roc_change&quot;,&quot;roc_allM_M&quot;,&quot;roc_allM&quot;,&quot;AUC_TOD&quot;,&quot;AUC_PD&quot;,&quot;AUC_allM&quot;,&quot;AUC_allM_M&quot;,&quot;AUC_TOD_abx&quot;), file = paste0(paste0(&quot;/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_&quot; , format(Sys.time(), &quot;%Y_%m_%d&quot;)),&quot;.RData&quot;))</code></pre>
 </div>
 <div id="make-figures" class="section level1">
 <h1>Make figures</h1>

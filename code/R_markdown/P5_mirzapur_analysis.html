@@ -414,12 +414,8 @@ ps_mirzapur_rare = rarefy_even_depth(ps_mirzapur_rare,sample.size=rare_min,rngse
 <pre><code>## 593OTUs were removed because they are no longer 
 ## present in any sample after random subsampling</code></pre>
 <pre><code>## ...</code></pre>
-<pre class="r"><code># number of Megaspaheara ASVs
-temp = as.data.frame(tax_table(ps_mirzapur_rare))
-dim(temp[temp$Genus == 'Megasphaera',])</code></pre>
-<pre><code>## [1] 125   6</code></pre>
-<pre class="r"><code># temp2 = as.data.frame(tax_table(ps_rare))
-# dim(temp2[temp2$Genus == 'Megasphaera',])</code></pre>
+<pre class="r"><code>ntaxa(subset_taxa(ps_mirzapur_rare, Genus == &quot;Megasphaera&quot;))</code></pre>
+<pre><code>## [1] 18</code></pre>
 </div>
 <div id="extract-asv-that-important-from-classifiers" class="section level1">
 <h1>Extract ASV that important from classifiers</h1>
@@ -442,7 +438,7 @@ tax2 = tax %&gt;%
                       as.character(Row.names),
                       ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
-twoASVs_TOD = tax2 %&gt;% filter(var == 'ASV10 (Megasphaera)')
+twoASVs_TOD = tax2 %&gt;% filter(var == tax2$var[grep(&quot;Megasphaera&quot;, tax2$var)])
 
 # get PD values
 plt_df = melt(otu_for_comp_PD %&gt;% rownames_to_column('sample')) %&gt;%
@@ -460,7 +456,7 @@ tax2 = tax %&gt;%
                       as.character(Row.names),
                       ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
                              paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
-PD_twoASVs = tax2 %&gt;% filter(var == 'ASV10 (Megasphaera)')
+PD_twoASVs = tax2 %&gt;% filter(var == tax2$var[grep(&quot;Megasphaera&quot;, tax2$var)])
 
 twoASVs = rbind(twoASVs_TOD %&gt;% mutate(time = 'TOD'), PD_twoASVs %&gt;% mutate(time = 'PD'))
 twoASVs_wide = tidyr::spread(twoASVs %&gt;% select(value_use,time,sample, Genus),
@@ -483,9 +479,146 @@ df = melt(df)</code></pre>
 #   scale_fill_manual(values = c('black','grey'), guide = F) +
 #   ylab('Percent of samples with reads') + xlab(NULL)
 
-df_mirz = melt(rbind(count_df_PD_mirzapur, count_df_TOD_mirzapur))  %&gt;% mutate(Site = 'Mirzapur')</code></pre>
+
+#UPDATE HERE: count_df_PD_mirpur column names have switched from genus to ASV
+count_df_PD_mirzapur</code></pre>
+<pre><code>##              time         sample  Megasphaera
+## 1   pre-detection 235041011_run2 0.1043943788
+## 2   pre-detection 235041012_run1 0.0000000000
+## 3   pre-detection 235041014_run1 0.0252063350
+## 4   pre-detection 235041016_run1 0.0000000000
+## 5   pre-detection 235051016_run2 0.1918358242
+## 6   pre-detection 235051017_run1 0.0000000000
+## 7   pre-detection 235051021_run2 0.0000000000
+## 8   pre-detection 235051022_run1 0.0000000000
+## 9   pre-detection 235071007_run2 0.4403301361
+## 10  pre-detection 235071008_run1 0.0000000000
+## 11  pre-detection 235071012_run2 0.3602498327
+## 12  pre-detection 235071013_run1 0.3792103502
+## 13  pre-detection 235081019_run2 0.0000000000
+## 14  pre-detection 235081020_run1 0.0000000000
+## 15  pre-detection 235111015_run2 0.0000000000
+## 16  pre-detection 235111016_run1 0.0000000000
+## 17  pre-detection 235171013_run1 0.5112647781
+## 18  pre-detection 235201013_run2 0.0000000000
+## 19  pre-detection 235281017_run2 0.0818648227
+## 20  pre-detection 235281018_run1 0.3151907205
+## 21  pre-detection 235291015_run2 0.3122908766
+## 22  pre-detection 235291016_run1 0.3522194959
+## 23  pre-detection 235301021_run2 0.0000000000
+## 24  pre-detection 235301022_run1 0.0000000000
+## 25  pre-detection 235371016_run2 0.0100379210
+## 26  pre-detection 235371017_run1 0.0008922596
+## 27  pre-detection 235381019_run2 0.1516841401
+## 28  pre-detection 235381020_run1 0.0044612982
+## 29  pre-detection 235451017_run2 0.3852331028
+## 30  pre-detection 235451018_run1 0.2600936873
+## 31  pre-detection 235491012_run2 0.0107071158
+## 32  pre-detection 235491018_run2 0.0330136070
+## 33  pre-detection 235491019_run1 0.0104840509
+## 34  pre-detection 235581006_run2 0.0000000000
+## 35  pre-detection 235581007_run1 0.0000000000
+## 36  pre-detection 235691009_run2 0.0000000000
+## 37  pre-detection 235691020_run2 0.2404639750
+## 38  pre-detection 235691021_run1 0.0000000000
+## 39  pre-detection 235701019_run2 0.0000000000
+## 40  pre-detection 235701020_run1 0.0591122017
+## 41  pre-detection 235711013_run2 0.1962971225
+## 42  pre-detection 235711014_run1 0.2743698416
+## 43  pre-detection 235731010_run2 0.0000000000
+## 44  pre-detection 235731011_run1 0.0000000000
+## 45  pre-detection 235801009_run2 0.0000000000
+## 46  pre-detection 235801010_run1 0.0000000000
+## 47  pre-detection 235841009_run2 0.0000000000
+## 48  pre-detection 235841010_run1 0.0000000000
+## 49  pre-detection 235871018_run2 0.0000000000
+## 50  pre-detection 235871019_run1 0.0000000000
+## 51  pre-detection 235911010_run2 0.0397055543
+## 52  pre-detection 235911011_run1 0.0874414455
+## 53  pre-detection 235981009_run1 0.0000000000
+## 54  pre-detection 236011013_run2 0.0000000000
+## 55  pre-detection 236011014_run1 0.0000000000
+## 56  pre-detection 236021009_run2 0.0000000000
+## 57  pre-detection 236021010_run1 0.0000000000
+## 58  pre-detection 236021012_run2 0.0000000000
+## 59  pre-detection 236021013_run1 0.0000000000
+## 60  pre-detection 236101017_run2 0.0000000000
+## 61  pre-detection 236101018_run1 0.0000000000
+## 62  pre-detection 236121013_run2 0.0263216596
+## 63  pre-detection 236121014_run1 0.0000000000
+## 64  pre-detection 236171012_run2 0.0024537140
+## 65  pre-detection 236171013_run1 1.0000000000
+## 66  pre-detection 236191017_run2 0.0000000000
+## 67  pre-detection 236191018_run1 0.0000000000
+## 68  pre-detection 236221009_run2 0.0060227526
+## 69  pre-detection 236221010_run1 0.0000000000
+## 70  pre-detection 236241016_run2 0.0000000000
+## 71  pre-detection 236241017_run1 0.0000000000
+## 72  pre-detection 236271016_run2 0.0000000000
+## 73  pre-detection 236271017_run1 0.0000000000
+## 74  pre-detection 236301012_run2 0.0000000000
+## 75  pre-detection 236301013_run1 0.0000000000
+## 76  pre-detection 236351009_run2 0.0000000000
+## 77  pre-detection 236351010_run1 0.0000000000
+## 78  pre-detection 236361011_run1 0.0000000000
+## 79  pre-detection 236391015_run2 0.0000000000
+## 80  pre-detection 236391016_run1 0.0000000000
+## 81  pre-detection 236451012_run2 0.0000000000
+## 82  pre-detection 236451013_run1 0.0000000000
+## 83  pre-detection 236501002_run2 0.0000000000
+## 84  pre-detection 236501003_run1 0.0000000000
+## 85  pre-detection 236511010_run2 0.0000000000
+## 86  pre-detection 236511201_run1 0.0901182244
+## 87  pre-detection 236591003_run2 0.0000000000
+## 88  pre-detection 236591004_run1 0.0000000000
+## 89  pre-detection 236801004_run2 0.0000000000
+## 90  pre-detection 236801005_run1 0.0000000000
+## 91  pre-detection 236891010_run2 0.0000000000
+## 92  pre-detection 236891011_run1 0.0000000000
+## 93  pre-detection 236921014_run2 0.0111532456
+## 94  pre-detection 236921015_run1 0.0000000000
+## 95  pre-detection 236931009_run2 0.0803033683
+## 96  pre-detection 236931010_run1 0.0000000000
+## 97  pre-detection 237001011_run2 0.0000000000
+## 98  pre-detection 237001012_run1 0.0000000000
+## 99  pre-detection 237021010_run2 0.0000000000
+## 100 pre-detection 237021011_run1 0.0000000000
+## 101 pre-detection 237031013_run2 0.0000000000
+## 102 pre-detection 237031014_run1 0.1947356681
+## 103 pre-detection 237061013_run1 0.2308721838
+## 104 pre-detection 237091012_run2 0.0000000000
+## 105 pre-detection 237091013_run1 0.0185143877
+## 106 pre-detection 237141013_run2 0.0000000000
+## 107 pre-detection 237141014_run1 0.0000000000
+## 108 pre-detection 237171013_run2 0.5690385902
+## 109 pre-detection 237171014_run1 0.3838947134
+## 110 pre-detection 237311009_run2 0.0000000000
+## 111 pre-detection 237311010_run1 0.0000000000
+## 112 pre-detection 237331012_run2 0.0000000000
+## 113 pre-detection 237331013_run1 0.0000000000
+## 114 pre-detection 237341009_run2 0.0000000000
+## 115 pre-detection 237341010_run1 0.0000000000
+## 116 pre-detection 237361011_run2 0.0000000000
+## 117 pre-detection 237361012_run1 0.0000000000
+## 118 pre-detection 237371009_run2 0.2286415347
+## 119 pre-detection 237401010_run2 0.0000000000
+## 120 pre-detection 237401011_run1 0.0000000000
+## 121 pre-detection 237441010_run2 0.0000000000
+## 122 pre-detection 237441011_run1 0.0000000000
+## 123 pre-detection 237531001_run1 0.0000000000
+## 124 pre-detection 237611012_run2 0.0000000000
+## 125 pre-detection 237611013_run1 0.0000000000
+## 126 pre-detection 237621012_run2 0.0000000000
+## 127 pre-detection 237621013_run1 0.0000000000
+## 128 pre-detection 237651011_run2 0.0000000000
+## 129 pre-detection 237651012_run1 0.0000000000
+## 130 pre-detection 237681010_run2 0.0000000000
+## 131 pre-detection 237681011_run1 0.1050635735</code></pre>
+<pre class="r"><code>df_mirz = melt(rbind(count_df_PD_mirzapur, count_df_TOD_mirzapur))  %&gt;% mutate(Site = 'Mirzapur')</code></pre>
 <pre><code>## Using time, sample as id variables</code></pre>
-<pre class="r"><code>df_mir = melt(rbind(count_df_PD_mirpur %&gt;% select(-symptomatic_use,-Collinsella,-`symptomatic?`) %&gt;% 
+<pre class="r"><code>df_mir = melt(rbind(count_df_PD_mirpur %&gt;% 
+                      rename(Megasphaera= `ASV15 (Megasphaera)`) %&gt;%
+                      select(sample, Megasphaera) %&gt;% 
                       mutate(time = 'pre-detection'), 
                     count_df_TOD_mirpur %&gt;% select(-symptomatic_use,-Parabacteroides,-`symptomatic?`) %&gt;% 
                       mutate(time = 'time-of-detection'))) %&gt;% mutate(Site = 'Mirpur')</code></pre>
@@ -516,11 +649,12 @@ df_mirz = melt(rbind(count_df_PD_mirzapur, count_df_TOD_mirzapur))  %&gt;% mutat
   mutate(NO_mega = Total - Megasphaera) %&gt;% select(-Total)
 rownames(df) = df$Site; df$Site = NULL
 chisq.test(df)</code></pre>
+<pre><code>## Warning in chisq.test(df): Chi-squared approximation may be incorrect</code></pre>
 <pre><code>## 
-##  Pearson's Chi-squared test with Yates' continuity correction
+##  Pearson's Chi-squared test
 ## 
 ## data:  df
-## X-squared = 4.3759, df = 1, p-value = 0.03645</code></pre>
+## X-squared = NaN, df = 1, p-value = NA</code></pre>
 </div>
 <div id="make-figures" class="section level1">
 <h1>Make figures</h1>

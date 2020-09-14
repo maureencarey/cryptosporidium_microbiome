@@ -23,7 +23,7 @@ names(colors) = c('diarrheal','subclinical','no crypto','both')
 # blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
 
 # load data
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_11.RData")
 load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
 
 # reorganizing DOB files

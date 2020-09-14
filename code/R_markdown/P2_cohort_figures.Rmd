@@ -14,7 +14,7 @@ knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/crypto
 
 # load packages
 library(ggplot2); library(rmarkdown); library(vegan); library(dotwhisker)
-library(dplyr); library(phyloseq)
+library(dplyr); library(phyloseq); library(tibble)
 
 # set constants
 SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000); theme_set(theme_bw())
@@ -23,7 +23,7 @@ names(colors) = c('diarrheal','subclinical','no crypto','both')
 # blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
 
 # load data
-load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_plot_2020_09_02.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_plot_2020_09_11.RData")
 
 ```
 
@@ -263,6 +263,62 @@ ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidi
 
 ```
 
+```{r}
+
+ps_rare_for_beta_mode_sample_data = ps_rare_for_beta
+qu = quantile(sample_data(ps_rare_for_beta_mode_sample_data)$Age.in.days, c(0.25, 0.5, 0.75))
+temp_sample_data = as(sample_data(ps_rare_for_beta_mode_sample_data),"data.frame") %>% 
+  rownames_to_column('sample') %>%
+  mutate(age_quartile = as.factor(ifelse(Age.in.days < qu[[1]][1], 1,
+                               ifelse(Age.in.days > qu[[3]][1], 4,
+                                      ifelse(Age.in.days > qu[[2]][1], 3,2)))),
+         hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)),
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>%
+    column_to_rownames('sample')
+sample_data(ps_rare_for_beta_mode_sample_data) = temp_sample_data
+p = plot_ordination(
+  physeq = ps_rare_for_beta_mode_sample_data,
+  ordination = ps_rare.ord,
+  color = "Clinical.type",
+  shape = "age_quartile"
+)   + 
+  scale_color_manual(values = c("#666666","#FF7F00","#1F78B4"),
+                     labels = c("12" = "diarrheal","10" = "subclinical","1" = "pre-detection") )+ # 12 is diarrhea, 1,2 are pre
+  #scale_shape_manual(values = c(5,16,4),
+   #                  labels = c("1" = "youngest quartile","2" = "middle","4" = "oldest quartile") )+
+  theme(plot.margin=unit(c(.5,.5,.5,.5),"cm"))  + 
+  labs(color = "symptomatic?", shape = "Age (quartitled)")
+p
+
+p = plot_ordination(
+  physeq = ps_rare_for_beta_mode_sample_data,
+  ordination = ps_rare.ord,
+  color = "Clinical.type",
+  shape = "meleagridis"
+)   + 
+  scale_color_manual(values = c("#666666","#FF7F00","#1F78B4"),
+                     labels = c("12" = "diarrheal","10" = "subclinical","1" = "pre-detection") )+ # 12 is diarrhea, 1,2 are pre
+  scale_shape_manual(values = c(5,16),
+                     labels = c("1" = "positive","0" = "negative") )+
+  theme(plot.margin=unit(c(.5,.5,.5,.5),"cm"))  + 
+  labs(color = "symptomatic?", shape = "C. meleagridis")
+p
+
+p = plot_ordination(
+  physeq = ps_rare_for_beta_mode_sample_data,
+  ordination = ps_rare.ord,
+  color = "Clinical.type",
+  shape = "hominis"
+)   + 
+  scale_color_manual(values = c("#666666","#FF7F00","#1F78B4"),
+                     labels = c("12" = "diarrheal","10" = "subclinical","1" = "pre-detection") )+ # 12 is diarrhea, 1,2 are pre
+  scale_shape_manual(values = c(5,16),
+                     labels = c("1" = "positive","0" = "negative") )+
+  theme(plot.margin=unit(c(.5,.5,.5,.5),"cm"))  + 
+  labs(color = "symptomatic?", shape = "C. hominis")
+p
+
+```
 
 Do all kids have at least one abx between predetction and time of detection???
 
