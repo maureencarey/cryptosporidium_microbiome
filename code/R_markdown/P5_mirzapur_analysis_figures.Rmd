@@ -24,6 +24,8 @@ colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
 names(colors) = c('diarrheal','subclinical','no crypto','both')
 # blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
 
+write.csv(sample_data(ps_mirzapur_rare)[,c(1,2)], "/Users/maureencarey/local_documents/work/crypto_microbiome/manuscript_drafts/info_for_dbGaP/mirzapur_samples_passedQC.csv", row.names = F)
+
 ```
 
 # Plot - Fig 4F

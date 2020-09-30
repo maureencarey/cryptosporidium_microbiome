@@ -32,6 +32,7 @@ names(colors) = c('diarrheal','subclinical','no crypto','both')
 # load data
 load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_plot_2020_09_11.RData")
 
+write.csv(sample_data(ps_rare_diff)[,c(1,2)] %>% mutate(), "/Users/maureencarey/local_documents/work/crypto_microbiome/manuscript_drafts/info_for_dbGaP/mirpur_samples_passedQC.csv", row.names = F)
 ```
 
 # Generate supplemental file 1D to get read counts

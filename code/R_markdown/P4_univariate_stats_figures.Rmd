@@ -74,9 +74,16 @@ ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidi
 
 ```
 
-Megasphaera fold change
+Megasphaera fold change (TOD)
 ```{r}
 
 tod_tax2 %>% filter(Genus == 'Megasphaera', size2 == 1) %>% select(log2FoldChange,padj)
+
+```
+
+Megasphaera fold change (predetection)
+```{r}
+
+predetection_tax2 %>% filter(Genus == 'Megasphaera', size2 == 1) %>% select(log2FoldChange,padj)
 
 ```

@@ -64,6 +64,7 @@ Figure 2A
 
 df_plot = merge(DOB_df, total_diarrhea %>% group_by(CHILDID) %>% summarize(n_diarr = n()), 
   by = "CHILDID", all = T)
+write.csv(df_plot$CHILDID,"/Users/maureencarey/local_documents/work/crypto_microbiome/manuscript_drafts/info_for_dbGaP/abx_samples.csv", row.names=FALSE)
 df_plot$n_diarr[is.na(df_plot$n_diarr)] = 0
 df_plot = merge(df_plot,as(sample_data(subset_samples(ps, pre_detection == F)),'data.frame'),
                 by.x = "CHILDID", by.y = "Child.ID", all = T) %>% 
