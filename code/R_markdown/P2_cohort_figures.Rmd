@@ -256,7 +256,7 @@ p = plot_ordination(
   scale_color_manual(values = c("#666666","#FF7F00","#1F78B4"),
                      labels = c("12" = "diarrheal","10" = "subclinical","1" = "pre-detection") )+ # 12 is diarrhea, 1,2 are pre
   theme(plot.margin=unit(c(.5,.5,.5,.5),"cm"))  + 
-  labs(color = "symptomatic?", shape = "Number of infections")
+  labs(color = "infection", shape = "Number of infections")
 p
 ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4A_pcoa_mirpur_euclidean.png", 
        plot=p, width = 5.4,height = 3,units = "in",dpi = 600)
@@ -355,7 +355,7 @@ ggplot(df_abx_month,aes(x= symptomatic, y = n_abx_doses, color = symptomatic)) +
   geom_boxplot(outlier.shape = NA) + 
   geom_point(alpha = 0.5, position = position_jitter(width = 0.3, height = 0, seed = SEED_INT)) +
   scale_color_manual(values = c(colors['diarrheal'],colors['subclinical'])) +
-  ylab('number of antibiotic doses') + xlab('symptomatic?') + guides(color = F) +
+  ylab('number of antibiotic doses') + xlab('infection') + guides(color = F) +
   ggpubr::stat_compare_means(comparisons = my_comparisons, size = 3, method = 't.test')
 ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/SFig2B_abx_MONTH_mirpur.png", 
               width = 3, height = 4, dpi = 600)

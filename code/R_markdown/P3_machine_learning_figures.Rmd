@@ -122,7 +122,7 @@ ggplot(twoASVs, aes(x = var, y = value_use, color = symptomatic_use)) +
   scale_y_sqrt() + ylab('relative abundance') + xlab(NULL) + 
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
         legend.position = "bottom",
-        legend.title = element_text(size = 9)) + guides(color=guide_legend(title="symptomatic?")) +
+        legend.title = element_text(size = 9)) + guides(color=guide_legend(title="infection")) +
   geom_hline(yintercept = 0.2, linetype = 'dotted', alpha = .75)
 ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/Fig4E_mega.png",
        width = 3.2,height = 4,units = "in",dpi = 300)
