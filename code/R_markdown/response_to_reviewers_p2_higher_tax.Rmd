@@ -1,0 +1,152 @@
+---
+title: "Response to Reviewers - Part 2 (Higher Taxonomic level)"
+author: "Maureen A. Carey"
+date: "1/14/2021"
+output: html_document
+---
+
+# Load packages and data
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(phyloseq); library(reshape2); library(tibble)
+library(randomForest); library(rmarkdown); library(dplyr); library(tidyr); library(pROC)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/data_cannot_be_shared/data.RData")
+total_diarrhea = total_diarrhea  %>% filter(CHILDID %in% burden_mirpur$SID) # remaining kids never were sick
+all_cause_diar = total_diarrhea %>% group_by(CHILDID,study) %>% summarize(episodes = n()) %>% ungroup()
+rm(list= ls()[! (ls() %in% c('all_cause_diar','SEED_INT','colors'))])
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_2020_09_11.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P2output_2020_09_11.RData")
+
+# make useful functions
+randomForest_res = function(x,y,N) { 
+  # x = variables used to predict class, y = classs labels, N = number imp variables you want
+  # THIS ONLY WORKS IF YOU"RE CLASSIFYING 10 v. 12 (subclinical v. diarrheal)
+  rf_res_object = randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.0001,100))
+
+  extracted_importance = importance(rf_res_object,type=2) # type 2 = node impurity, more useful for auc
+  extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
+  topN = tail(extracted_importance,N)
+
+  predictions = as.data.frame(predict(rf_res_object,type="prob"))
+  predictions$predict = names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+  predictions$observed = y
+  
+  ROC_res = roc(ifelse(predictions$observed==10, 10, 12), as.numeric(predictions$`10`))
+  AUC_res = auc(ROC_res)
+  return(list(rf_res_object,ROC_res,AUC_res,topN))  
+}
+
+```
+
+# Higher taxonomy
+
+```{r}
+
+ps_rare_diff = tax_glom(ps_rare_diff, "Genus")
+#ps_rare_diff = tax_glom(ps_rare_diff, "Family")
+
+```
+
+# Can we predict whether a sample was sub-clinical or diarrheal from predetection microbiota?
+
+```{r}
+
+compare <- c(1,2) # predetection -> +/- symptoms
+ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
+y <- as.factor(sample_data(ps_for_class)$Clinical.type)
+rf <- randomForest(x,y,importance = TRUE, ntree = 50*dim(x)[[2]], replace=TRUE, nodesize=1, classwt=c(0.00015,130))
+
+save(list = c("rf"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/genus_level_rf_PD_" , format(Sys.time(), "%Y_%m_%d")),".RData"))  
+
+x_for_PD = x
+y_for_PD = y
+
+extracted_importance = importance(rf,type=2) # type 2 = node impurity, more useful for auc
+extracted_importance = extracted_importance[rownames(extracted_importance)[order(extracted_importance)],]
+top10_PD = tail(extracted_importance,15)
+
+predictions = as.data.frame(predict(rf,type="prob"))
+predictions$predict <- names(predictions)[1:2][apply(predictions[,1:2], 1, which.max)]
+predictions$observed <- y
+
+roc_PD <- roc(ifelse(predictions$observed==1, 1, 2), as.numeric(predictions$`1`))
+AUC_PD = auc(roc_PD)
+AUC_PD
+
+rm(x,y,rf,predictions,extracted_importance,ps_for_class)
+
+```
+
+# Can we predict whether a sample was sub-clinical or diarrheal from TOD microbiota?
+
+```{r}
+
+compare <- c(10,12) # TOD +/- symptoms
+ps_for_class <- subset_samples(ps_rare_diff, Clinical.type %in% compare)
+x <- cbind(otu_table(ps_for_class), as(sample_data(ps_for_class),"data.frame") %>% select(Age.in.days, LIB13.C..hominis, C..mel.y)) %>% 
+  mutate(hominis = as.factor(ifelse(LIB13.C..hominis <40,1,0)), 
+         meleagridis = as.factor(ifelse(C..mel.y <40,1,0))) %>% select(-LIB13.C..hominis,-C..mel.y)
+y <- as.factor(sample_data(ps_for_class)$Clinical.type)
+x_for_TOD = x
+y_for_TOD = y
+
+rf = randomForest_res(x_for_TOD,y_for_TOD,15)
+top10_TOD = rf[[4]]
+roc_TOD = rf[[2]]
+AUC_TOD = rf[[3]]
+AUC_TOD
+
+save(list = c("rf","x","y"), file = paste0(paste0("~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/genus_level_rf_TOD_" , format(Sys.time(), "%Y_%m_%d")),".RData"))
+rm(x,y,rf,ps_for_class)
+
+```
+
+# Is Megasphaera an important variable with this genus level analysis?
+
+```{r}
+
+## gini
+plt_df1 = as.data.frame(top10_TOD) %>% rownames_to_column('variable') %>% dplyr::rename(value = top10_TOD) 
+plt_df2 = as.data.frame(top10_PD) %>%rownames_to_column('variable') %>% dplyr::rename(value = top10_PD)
+plt_df = rbind(plt_df1 %>% mutate(model = 'time-of-detection'),plt_df2 %>% mutate(model = 'pre-detection'))
+plt_df$model = as.factor(plt_df$model)
+
+tax = tax_table(ps_rare_diff)
+tax = tax[rownames(tax) %in% plt_df$variable,]
+tax = merge(tax,plt_df, by.x= 'row.names', by.y = "variable", all.x = F, all.y = T)
+tax$Genus = as.character(tax$Genus)
+tax2 = tidyr::spread(tax, key = model, value = value)  %>% # this line is new here
+  transform(id=as.numeric(factor(Row.names))) %>%
+  mutate(var = ifelse(is.na(Family),
+                      as.character(Row.names),
+                      ifelse(is.na(Genus), paste0(paste0(paste0(paste0(as.character('ASV'),id),' ([f]'),Family),')'),
+                             paste0(paste0(paste0(paste0(as.character('ASV'),id),' ('),Genus),')'))))
+
+
+important_genera = na.omit(tax2)
+plot_tax = tax2 %>% select(pre.detection, time.of.detection, var) %>% melt(id.vars = "var", na.rm = T)
+plot_tax$var
+grep("Megasphaera", levels(plot_tax$var))
+
+```
+
+# No (see megasphaera prevalence plots in response_to_reviewers_p1.Rmd)
+
+Rather, `r important_genera$Genus` are important at both timepoints. Many of these genera were  important in the ASV-level time-of-detection classifer, but some emerge as important only when looking at the genus-level analysis. None of these genera were important in the ASV-level predetection classifier and only Sutterella, Bifidobacterium, and Veillonella were important in the ASV-level time-of-detection classifier.

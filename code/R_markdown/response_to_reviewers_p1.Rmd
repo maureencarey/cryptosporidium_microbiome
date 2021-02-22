@@ -1,0 +1,233 @@
+---
+title: "Response to Reviewers - Part 1"
+author: "Maureen A. Carey"
+date: "1/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# load products from P1_analysis_prep and ASV
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/")
+
+# load packages
+library(phyloseq); library(reshape2); library(tibble)
+library(rmarkdown); library(dplyr); library(tidyr)
+library(ggplot2)
+
+# set constants
+SEED_INT = 10; set.seed(SEED_INT); options(scipen=10000)
+colors = c("#1F78B4","#FF7F00","#666666", 'light gray')
+names(colors) = c('diarrheal','subclinical','no crypto','both')
+# blue = "#1F78B4" orange = "#FF7F00" gray = "#666666"
+
+# load data
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P1output_plot_2020_09_11.RData")
+load("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/results/P3output_plot_2020_09_11.RData")
+
+
+colors_temp = c(colors[c(1:2,4)],colors[4]); names(colors_temp)[3] = ' prior to\ndiarrheal'
+names(colors_temp)[4] = ' prior to\nsubclinical'
+colors_temp2 = as.data.frame(colors_temp)
+
+
+```
+
+# Reviewer 1
+
+Carey et al. uses 16s rRNA sequencing to identify gut microbes associated with the development of symptomatic vs asymptomatic cryptosporidiosis in infants in Bangladesh. Using univariate analysis and RandomForest machine learning of pre-infection and time-of-infection samples, Megasphaera was found to be negatively correlated with symptomatic disease.
+The paper is clearly written, excellent figures, and the study is about an interesting and important issue. The sample set used is unique & valuable, since there are "pre-disease" samples, which are rare in the microbiome world. Regarding the methods, there is excellent accounting for antibiotics in this manuscript with clear info on use and this includes an analysis of how antibiotic use was not found to impact the classifier performance in the model. Although the sequencing methods were rigorous and appropriate (use of DADA2, RDP ref database and inclusion of mock communities as controls), unfortunately a lot data (average of 17k reads per sample, when only 10k were used) was thrown out in the normalization process-I was left wondering if other normalization methods (or no normalization method) would have resulted in the same conclusions. 
+
+I want to also mention that I know there is a significant literature on megasphaera (specifically eldensii) as a probiotic used in the veterinary world. I am not a veterinary microbiome expert, but perhaps looking into this data could add some interesting/relevant background to this manuscript, especially regarding potential hypotheses for mechanisms of this relationship.
+Finally, 16S sequencing was used. Taxonomic identifications only (without gene-level information) have, over time, become harder to interpret due to a high amount of genetic diversity (ie functional capacity) in closely related organisms (the Prevotella genus is a great example of this). Due to this, and because 16S defines only to the genus level and each genera can span multiple ASVs, 16S analyses are by nature significantly limited in the conclusions that can be drawn, even in assessing correlations. That said, the conclusions drawn in this manuscript are appropriately modest, which was great to see (too many 16S papers overstate their findings). 
+
+## Major Concern #1
+
+* Why were Euclidean distances used for principal coordinate analysis, and were other methods used also? There are many kinds of analytic methods for comparing populations (ie Unifrac), and Euclidean is not among the most common. For example, Euclidean distances are insensitive to rare taxonomic groups. 
+
+*Authors' response: *
+
+PCoA with alternative methods
+run rivanna script
+
+## Major Concern #2
+
+"Authors mention one Megasphaera ASV representing at least 1% of reads of the entire study. The prevalence of this ASV within each group is not shown. From Fig 4E, it seems the high abundance of Megasphaera is driven by 17 out of the 60 subclinical infections samples while there are 4-5 of 31 diarrheal samples with presence of Megasphaera. A heatmap of top ASVs would be beneficial to show the relevance of these ASVs in the overall cohort."
+
+*Authors' response: *
+
+Megasphaera prevalence
+```{r}
+
+twoASVs_seq = twoASVs %>% select(Row.names,Genus) %>% unique() 
+Mega = twoASVs_seq$Row.names # SPECIFIC ASV
+just_MegaASV = subset_taxa(ps_rare, rownames(tax_table(ps_rare)) %in% c(Mega))
+asv_percent = cbind(as(sample_data(ps_rare),"data.frame") %>% select(pre_detection,symptomatic),
+                     sample_sums(just_MegaASV)/sample_sums(ps_rare))
+asv_percent_withIDs = cbind(as(sample_data(ps_rare),"data.frame") %>% select(pre_detection,symptomatic,Child.ID),
+                     sample_sums(just_MegaASV)/sample_sums(ps_rare))
+colnames(asv_percent)[3] = 'percent'
+colnames(asv_percent_withIDs)[4] = 'percent'
+asv_percent_withIDs = asv_percent_withIDs %>% group_by(Child.ID, symptomatic) %>% summarize(total_percent = sum(percent))%>% mutate(prevalence = ifelse(total_percent > 0, 1, 0))
+
+asv_percent = asv_percent %>% 
+  mutate(sample_group = ifelse(pre_detection,
+                               ifelse(symptomatic, ' prior to\ndiarrheal',' prior to\nsubclinical'),
+                               ifelse(symptomatic, 'diarrheal','subclinical')),
+         prevalence = ifelse(percent > 0, 1, 0))
+
+my_comparisons = list(c('diarrheal','subclinical'),
+                      c('diarrheal',' prior to\ndiarrheal'),
+                      c(' prior to\nsubclinical','subclinical'),
+                      c(' prior to\nsubclinical',' prior to\ndiarrheal'))
+ggplot(asv_percent, aes(x = sample_group, y = percent, color = sample_group)) + 
+  scale_color_manual(values = colors_temp) +
+  geom_boxplot(outlier.colour = NA) +
+  geom_point(alpha = 0.5, position = position_jitter(width = 0.3,height = 0)) + 
+  scale_y_sqrt() +
+  ggpubr::stat_compare_means(comparisons = my_comparisons, size = 2, method = 't.test') +
+  guides(color = F) + xlab(NULL) + ylab('percent of total reads') +ggtitle('Important Megasphaera ASV')
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/figures_for_reviewers/mega_prevalence_p1.png",
+       width = 3.2,height = 3,units = "in",dpi = 300)
+
+# All other Mega ASVs
+excluding_MegaASV = subset_taxa(ps_rare, Genus=="Megasphaera" & !(rownames(tax_table(ps_rare)) %in% c(Mega)))
+genus_percent = cbind(as(sample_data(ps_rare),"data.frame") %>% select(pre_detection,symptomatic),
+                    sample_sums(excluding_MegaASV)/sample_sums(ps_rare))
+colnames(genus_percent)[3] = 'percent'
+
+genus_percent = genus_percent %>% 
+  mutate(sample_group = ifelse(pre_detection,
+                               ifelse(symptomatic, ' prior to\ndiarrheal',' prior to\nsubclinical'),
+                               ifelse(symptomatic, 'diarrheal','subclinical')),
+         prevalence = ifelse(percent > 0, 1, 0))
+
+ggplot(genus_percent, aes(x = sample_group, y = percent, color = sample_group)) + 
+  scale_color_manual(values = colors_temp) +
+  geom_boxplot(outlier.colour = NA) +
+  geom_point(alpha = 0.5, position = position_jitter(width = 0.3,height = 0)) + 
+  scale_y_sqrt() +
+  ggpubr::stat_compare_means(comparisons = my_comparisons, size = 2, method = 't.test') +
+  guides(color = F) + xlab(NULL) + ylab('percent of total reads') +ggtitle('All other Megasphaera ASVs')
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/figures_for_reviewers/mega_prevalence_p2.png",
+       width = 3.2,height = 3,units = "in",dpi = 300)
+
+
+# prevalence plot
+
+subclin = asv_percent %>% filter(sample_group == 'subclinical') %>% select(prevalence) %>% table()
+diar = asv_percent %>% filter(sample_group == 'diarrheal') %>% select(prevalence) %>% table()
+p_subclin = asv_percent %>% filter(sample_group == ' prior to\nsubclinical') %>% select(prevalence) %>% table()
+p_diar = asv_percent %>% filter(sample_group == ' prior to\ndiarrheal') %>% select(prevalence) %>% table() 
+groups = c('subclinical','diarrheal',' prior to\nsubclinical',' prior to\ndiarrheal')
+asv_prev = as.data.frame(cbind(groups,
+      rbind(subclin, diar,p_subclin, p_diar)))
+asv_prev$`0` = as.numeric(as.character(asv_prev$`0`))
+asv_prev$`1` = as.numeric(as.character(asv_prev$`1`))
+asv_prev = asv_prev %>% mutate(prevalence_frac = (`1`/(`0`+`1`)),
+                                   prevalence = 100*prevalence_frac)
+asv_prev_across_study = 100*sum(asv_prev$`1`)/(sum(asv_prev$`0`)+sum(asv_prev$`1`))
+
+kids_with_ASV = with(asv_percent_withIDs, table(prevalence, symptomatic))
+kids_with_ASV
+
+subclin = genus_percent %>% filter(sample_group == 'subclinical') %>% select(prevalence) %>% table()
+diar = genus_percent %>% filter(sample_group == 'diarrheal') %>% select(prevalence) %>% table()
+p_subclin = genus_percent %>% filter(sample_group == ' prior to\nsubclinical') %>% select(prevalence) %>% table()
+p_diar = genus_percent %>% filter(sample_group == ' prior to\ndiarrheal') %>% select(prevalence) %>% table() 
+groups = c('subclinical','diarrheal',' prior to\nsubclinical',' prior to\ndiarrheal')
+genus_prev = as.data.frame(cbind(groups,
+      rbind(subclin, diar,p_subclin, p_diar)))
+genus_prev$`0` = as.numeric(as.character(genus_prev$`0`))
+genus_prev$`1` = as.numeric(as.character(genus_prev$`1`))
+genus_prev = genus_prev %>% mutate(prevalence_frac = (`1`/(`0`+`1`)),
+                                   prevalence = 100*prevalence_frac)
+genus_prev_across_study = 100*sum(genus_prev$`1`)/(sum(genus_prev$`0`)+sum(genus_prev$`1`))
+  
+
+
+ggplot(asv_prev, aes(x = groups, y = prevalence, fill = groups)) + 
+  scale_fill_manual(values = colors_temp) +
+  geom_bar(stat = "identity") + 
+  guides(fill = F) + xlab(NULL) + ylab('detected in X% of samples') +ggtitle('Important Megasphaera ASV')
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/figures_for_reviewers/mega_prevalence_p3.png",
+       width = 3.2,height = 3,units = "in",dpi = 300)
+
+
+ggplot(genus_prev, aes(x = groups, y = prevalence, fill = groups)) + 
+  scale_fill_manual(values = colors_temp) +
+  geom_bar(stat = "identity") + 
+  guides(fill = F) + xlab(NULL) + ylab('detected in X% of samples') +ggtitle('All other Megasphaera ASVs')
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/figures_for_reviewers/mega_prevalence_p4.png",
+       width = 3.2,height = 3,units = "in",dpi = 300)
+
+
+fyi_important_seq = twoASVs_seq$Row.names
+fyi_unimportant_seq = colnames(otu_table(excluding_MegaASV))
+```
+
+Megasphaera ASV prevalence across study: `r asv_prev_across_study`
+
+Megasphaera prevalence (all ASVs) across study: `r genus_prev_across_study`
+
+Heatmap of top ASVs
+```{r}
+
+sample_data(ps_rare)$group = ifelse(sample_data(ps_rare)$pre_detection,ifelse(sample_data(ps_rare)$symptomatic,' prior to diarrheal',' prior to subclinical'),ifelse(sample_data(ps_rare)$symptomatic,'diarrheal','subclinical'))
+
+# # all
+# (ps_fam_rare <- tax_glom(ps_rare, "Family"))
+# plot_heatmap(ps_fam_rare, sample.label = "group", taxa.label = "Family", 
+#              sample.order="group")
+
+# ## most common (top 100)
+# ps_rare_top <- prune_taxa(names(sort(taxa_sums(ps_rare),TRUE)[1:100]), ps_rare)
+# (ps_fam_rare <- tax_glom(ps_rare_top, "Family"))
+# plot_heatmap(ps_fam_rare, method = "NMDS", distance = "bray", sample.label = "group", taxa.label = "Family", 
+#              sample.order="group")
+
+## most common (top 10)
+ps_rare_top <- prune_taxa(names(sort(taxa_sums(ps_rare),TRUE)[1:10]), ps_rare)
+
+groups = as.data.frame(sample_data(ps_rare_top)$group, row.names = NULL); colnames(groups) = 'group'
+groups = merge(groups, colors_temp, all.y = T, by.y = 'row.names',by.x = 'group')
+plot_heatmap(ps_rare_top, sample.label = "group", taxa.label = "Genus", sample.order="group")+
+  theme(axis.ticks.x = element_line(color = as.character(groups$y)), axis.text.x = element_text(color = as.character(groups$y), size = 2)) + 
+  guides( fill = F)
+
+ggsave("/Users/maureencarey/local_documents/work/crypto_microbiome/cryptosporidium_microbiome/figures/figures_for_reviewers/heatmap.png",
+       width = 8,height = 3,units = "in",dpi = 300)
+
+```
+
+## Major Concern #3
+
+* Does analysis at a higher taxonomic level yield different results?
+
+*Authors' response: This is a more involved response so see document: response_to_reviewers_p2_higher_tax.Rmd*
+
+*In summary, looking at higher taxonomic level yields different results. For example, Megasphaera (as a genus rather than the specific ASV) is not important in the classifier because many of the ASVs in the genus are not different across groups (see prevalence plots above).*
+
+*When we look at higher taxonomic levels, Bacteroides, Oisenella, Sutterella, Bifidobacterium, Streptococcus, Dialister, and Veillonella are important at both timepoints. None of these genera were important in the ASV-level predetection classifier and only Sutterella, Bifidobacterium, and Veillonella were important in the ASV-level time-of-detection classifier.*
+
+## Major Concern #4
+
+* There is no limitations section. I suggest small to moderate sample size, unknown generalizability to global populations, large amount of data thrown out for normalization, and the fact that pre -infection and post-infection samples sequenced in different batches as minimum discussion points. (While the last point is fully disclosed earlier in the paper, this should be further discussed including how this may have biased results).
+
+## Major Concern #5
+
+* Is there any in vitro data probing the mechanism of Megasphaera association with symptomatic vs. asymptomatic Cryptosporidium? This would strengthen the manuscript, but I understand it may be out of the scope of the study. 
+
+## Minor Concerns
+
+Minor:
+* The concluding sentence appears to be about a separate topic (treatment of disease). The manuscript is about ASVs found prior to infection (predictive of disease). The link between an ASV that may prevent colonization/initiation of disease is not related to the ASVs potential as a treatment once disease has begun - unless you are suggesting this ASV as a potential prophylactic among an exposed population. I think a different concluding sentence may serve the study better.  
+* Include # of people studied, and # of people where Megasphaera was & was not found in samples, in the abstract.  
+* Words/phrases like "classifier" and "node purity" need to be explained (or, even better, a different terminology used); there may be unfamiliarity with machine learning methods. 
+* There is the axis label "symptomatic?" (with a question mark) in several suppl figs may be clearer with the label "Infection" (since the sublabels are "subclinical" and "diarrheal"). 
+* Reference corrections: cited Ref 57 for Megasphaera colonization in the small intestines but that paper does not have Megasphaera in the text. Ref 58 for Megasphaera colonization in the large intestines but this paper found Megasphaera in vaginal swabs and there are no colonic samples.
+
+# Reviewer 2
+
+This study aimed at characterizing the role the intestinal microbiota plays in cryptosporidial infection and if there are differences between symptomatic and asymptomatic infections in children. This is an important area of research since infections of cryptosporidium are important causes of diarrheal illness in children, especially in developing countries and little is known about how the microbiota its a role in infection. The authors looked for associations with different groups and utilized different statistical analysis to try find patterns of microbiota with clinical disease. However, for the most part they were not able to identify distinct patterns. One of the challenges with this type of study was the diversity of the initial samples. This is understandably difficult to control in a setting where the population is exposed to a breadth of pathogens and antibiotic treatment in patient population appears widespread. Using initial samples with greater exclusions or more narrowly focused criteria might provide a less diverse initial samples, though arguably less relevant in the setting. One interesting result, is that cryptosporidium infections were associated with decreases in Megashaera group and if proven to be consistent in followed up studies could be expanded or be used as future biomarkers. Overall, the manuscript is well written and data appropriately displayed and analyzed.
